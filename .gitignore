@@ -1,0 +1,11 @@
+.DS_Store
+Thumbs.db
+*.user
+*.suo
+*.pdb
+*.exe
+*.pkg
+*.app/
+__pycache__/
+/windows/build/
+/macos/build/

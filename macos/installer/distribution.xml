@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>键盘小黑猫</title>
+  <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+  <volume-check><allowed-os-versions><os-version min="11.0"/></allowed-os-versions></volume-check>
+  <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+  <welcome file="welcome.html" mime-type="text/html"/>
+  <conclusion file="finish.html" mime-type="text/html"/>
+  <choices-outline><line choice="keycat"/></choices-outline>
+  <choice id="keycat" visible="false" title="键盘小黑猫"><pkg-ref id="local.keycat.desktop.pkg"/></choice>
+  <pkg-ref id="local.keycat.desktop.pkg" version="1.5.0" onConclusion="none">#Keycat.pkg</pkg-ref>
+  <pkg-ref id="local.keycat.desktop.pkg"><must-close><app id="local.keycat.desktop"/></must-close></pkg-ref>
+</installer-gui-script>
