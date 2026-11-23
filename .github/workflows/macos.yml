@@ -1,0 +1,41 @@
+name: macOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'macos/**'
+      - '.github/workflows/macos.yml'
+  pull_request:
+    paths:
+      - 'macos/**'
+      - '.github/workflows/macos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the universal installer
+        run: bash macos/build.sh
+      - name: Test the scale control
+        run: bash macos/tests/scale.sh
+      - name: Verify the packaged app
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg=(macos/build/*.pkg)
+          pkgutil --expand-full "${pkg[0]}" "$RUNNER_TEMP/keycat-expanded"
+          app="$(find "$RUNNER_TEMP/keycat-expanded" -type d -name '*.app' -print -quit)"
+          codesign --verify --strict --all-architectures "$app"
+          xcrun lipo "$app/Contents/MacOS/Keycat" -verify_arch arm64 x86_64
+      - name: Save the verified installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: macos/build/*.pkg
+          if-no-files-found: error

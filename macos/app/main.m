@@ -28,28 +28,40 @@ static NSInteger StyleDefault(NSString *key, NSInteger fallback) {
     NSInteger value=[NSUserDefaults.standardUserDefaults integerForKey:key];
     return value>=0&&value<=3?value:fallback;
 }
-static NSArray<NSNumber *> *Sizes(void) { return @[@.72,@1.0,@1.3,@1.65]; }
+static double ScaleRatio(id storedRatio) {
+    if (![storedRatio isKindOfClass:NSNumber.class]) return 1;
+    double ratio=[storedRatio doubleValue];
+    return isfinite(ratio) ? fmax(.01, fmin(2.0, ratio)) : 1;
+}
+static NSSize PetSize(double ratio) {
+    return NSMakeSize(306 * ratio, 298 * ratio);
+}
 
 @implementation KCController {
     KCPetPanel *_window;
     KCPetView *_pet;
     NSStatusItem *_status;
     NSMenu *_menu;
+    NSSlider *_sizeSlider;
+    NSTextField *_sizeValue;
     NSTimer *_timer;
     CFMachPortRef _tap;
     CFRunLoopSourceRef _source;
     double _lastConsentCheck, _scale;
+    NSPoint _resizeAnchor;
     BOOL _alwaysOnTop, _through, _menuOpen, _permission;
 }
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
     NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;
     [defaults registerDefaults:@{@"cat":@3,@"keyboard":@1,@"mouse":@3,@"labels":@YES,@"alwaysOnTop":@YES,
                                  @"mouseThrough":@NO,@"size":@1.0}];
-    _scale=[defaults doubleForKey:@"size"];if(![Sizes() containsObject:@(_scale)])_scale=1;
+    _scale=ScaleRatio([defaults objectForKey:@"size"]);
     _through=[defaults boolForKey:@"mouseThrough"];_alwaysOnTop=[defaults boolForKey:@"alwaysOnTop"];
-    NSRect frame=NSMakeRect(0,0,306*_scale,298*_scale);
+    NSRect frame=(NSRect){NSZeroPoint,PetSize(_scale)};
     _window=[[KCPetPanel alloc] initWithContentRect:frame styleMask:NSWindowStyleMaskBorderless|NSWindowStyleMaskNonactivatingPanel
                                     backing:NSBackingStoreBuffered defer:NO];
+    _window.minSize=NSMakeSize(1,1);
+    [_window setFrame:frame display:NO];
     _window.title=@"键盘小黑猫";_window.opaque=NO;_window.backgroundColor=NSColor.clearColor;
     _window.hasShadow=NO;_window.hidesOnDeactivate=NO;_window.releasedWhenClosed=NO;
     _window.level=_alwaysOnTop?NSFloatingWindowLevel:NSNormalWindowLevel;
@@ -88,8 +100,7 @@ static NSArray<NSNumber *> *Sizes(void) { return @[@.72,@1.0,@1.3,@1.65]; }
     }
 }
 - (BOOL)windowOnScreen {
-    NSPoint center=NSMakePoint(NSMidX(_window.frame),NSMidY(_window.frame));
-    for(NSScreen *s in NSScreen.screens)if(NSPointInRect(center,s.visibleFrame))return YES;
+    for(NSScreen *s in NSScreen.screens)if(NSIntersectsRect(_window.frame,s.visibleFrame))return YES;
     return NO;
 }
 - (void)dockToCorner {
@@ -144,7 +155,7 @@ static NSArray<NSNumber *> *Sizes(void) { return @[@.72,@1.0,@1.3,@1.65]; }
     if(t-_lastConsentCheck>3)[self refreshTap];
     NSPoint p=NSEvent.mouseLocation;
     NSPoint windowPoint=[_window convertPointFromScreen:p];NSPoint local=[_pet convertPoint:windowPoint fromView:nil];
-    local=NSMakePoint(75+local.x/_scale,9+local.y/_scale);
+    local=NSMakePoint(75+306*local.x/_pet.bounds.size.width,9+298*local.y/_pet.bounds.size.height);
     NSScreen *display=_window.screen?:NSScreen.mainScreen;
     for(NSScreen *s in NSScreen.screens)if(NSPointInRect(p,s.frame)){display=s;break;}
     NSRect f=display.frame;NSPoint norm=NSZeroPoint;
@@ -184,11 +195,7 @@ static NSArray<NSNumber *> *Sizes(void) { return @[@.72,@1.0,@1.3,@1.65]; }
     [self styleGroup:@"猫咪样式" choices:@[@"经典黑猫",@"奶油橘猫",@"日本短尾三花",@"长毛虎斑"] current:_pet.catStyle action:@selector(catAction:) resource:@"portrait-%ld"];
     [self styleGroup:@"键盘样式" choices:@[@"经典奶油",@"薄荷打字机",@"冰蓝电竞",@"胡桃木"] current:_pet.keyboardStyle action:@selector(keyboardAction:) resource:@"keyboard-%ld"];
     [self styleGroup:@"鼠标样式" choices:@[@"奶油滚轮",@"雾紫鹅卵石",@"冰蓝电竞",@"酒红轨迹球"] current:_pet.mouseStyle action:@selector(mouseAction:) resource:@"mouse-%ld-normal"];
-    NSMenu *sizes=[[NSMenu alloc] initWithTitle:@"小猫大小"];[self entry:@"小猫大小" action:NULL menu:_menu].submenu=sizes;
-    for(NSNumber *size in Sizes()){
-        NSMenuItem *item=[self entry:[NSString stringWithFormat:@"%ld%%",lround(size.doubleValue*100)] action:@selector(sizeAction:) menu:sizes];
-        item.representedObject=size;item.state=(fabs(_scale-size.doubleValue)<.001)?NSControlStateValueOn:NSControlStateValueOff;
-    }
+    [self addSizeControl];
     [_menu addItem:NSMenuItem.separatorItem];
     [self entry:@"显示浮动键帽" action:@selector(labelsAction:) menu:_menu].state=_pet.showsLabels?NSControlStateValueOn:NSControlStateValueOff;
     [self entry:@"保持置顶" action:@selector(topAction:) menu:_menu].state=_alwaysOnTop?NSControlStateValueOn:NSControlStateValueOff;
@@ -200,16 +207,56 @@ static NSArray<NSNumber *> *Sizes(void) { return @[@.72,@1.0,@1.3,@1.65]; }
     [self entry:_window.visible?@"暂时隐藏":@"显示小猫" action:@selector(toggleVisible:) menu:_menu];
     [self entry:@"退出键盘小黑猫" action:@selector(quit:) menu:_menu];
 }
-- (void)menuNeedsUpdate:(NSMenu *)menu { if(menu==_menu)[self rebuildMenu]; }
-- (void)menuWillOpen:(NSMenu *)menu { _menuOpen=YES; }
+- (void)menuNeedsUpdate:(NSMenu *)menu { if(menu==_menu && !_menuOpen)[self rebuildMenu]; }
+- (void)menuWillOpen:(NSMenu *)menu {
+    _menuOpen=YES;
+    _resizeAnchor=NSMakePoint(NSMaxX(_window.frame),NSMinY(_window.frame));
+}
 - (void)menuDidClose:(NSMenu *)menu { _menuOpen=NO; }
 - (void)catAction:(NSMenuItem *)item { _pet.catStyle=item.tag;[NSUserDefaults.standardUserDefaults setInteger:item.tag forKey:@"cat"];_pet.needsDisplay=YES; }
 - (void)keyboardAction:(NSMenuItem *)item { _pet.keyboardStyle=item.tag;[NSUserDefaults.standardUserDefaults setInteger:item.tag forKey:@"keyboard"];_pet.needsDisplay=YES; }
 - (void)mouseAction:(NSMenuItem *)item { _pet.mouseStyle=item.tag;[NSUserDefaults.standardUserDefaults setInteger:item.tag forKey:@"mouse"];_pet.needsDisplay=YES; }
-- (void)sizeAction:(NSMenuItem *)item {
-    NSRect old=_window.frame;_scale=[item.representedObject doubleValue];
-    [_window setFrame:NSMakeRect(NSMaxX(old)-306*_scale,NSMinY(old),306*_scale,298*_scale) display:YES];
-    if(![self windowOnScreen])[self dockToCorner];
+- (void)addSizeControl {
+    NSMenuItem *item=[self entry:@"小猫大小" action:NULL menu:_menu];
+    NSView *row=[[NSView alloc] initWithFrame:NSMakeRect(0,0,254,56)];
+    NSTextField *caption=[NSTextField labelWithString:item.title];
+    caption.font=[NSFont menuFontOfSize:0];
+    caption.frame=NSMakeRect(16,30,120,20);
+    [row addSubview:caption];
+    _sizeValue=[NSTextField labelWithString:@""];
+    _sizeValue.font=[NSFont monospacedDigitSystemFontOfSize:NSFont.smallSystemFontSize weight:NSFontWeightRegular];
+    _sizeValue.textColor=NSColor.secondaryLabelColor;
+    _sizeValue.alignment=NSTextAlignmentRight;
+    _sizeValue.frame=NSMakeRect(171,30,65,19);
+    [row addSubview:_sizeValue];
+    _sizeSlider=[NSSlider sliderWithValue:_scale*100 minValue:1 maxValue:200 target:self action:@selector(sizeAction:)];
+    _sizeSlider.frame=NSMakeRect(14,5,226,23);
+    _sizeSlider.continuous=YES;
+    _sizeSlider.accessibilityLabel=item.title;
+    [row addSubview:_sizeSlider];
+    item.view=row;
+    [self updateSizeIndicator];
+}
+- (void)updateSizeIndicator {
+    NSInteger tenths=lround(_scale*1000);
+    _sizeValue.stringValue=tenths%10
+        ? [NSString stringWithFormat:@"%.1f%%",tenths/10.]
+        : [NSString stringWithFormat:@"%ld%%",(long)tenths/10];
+    _sizeSlider.accessibilityValueDescription=_sizeValue.stringValue;
+}
+- (void)sizeAction:(NSSlider *)sender {
+    double next=ScaleRatio(@(sender.doubleValue/100.));
+    if (next==_scale) return;
+    _scale=next;
+    [self updateSizeIndicator];
+    NSRect old=_window.frame;
+    NSPoint anchor=_menuOpen?_resizeAnchor:NSMakePoint(NSMaxX(old),NSMinY(old));
+    NSSize size=PetSize(_scale);
+    [_window setFrame:NSMakeRect(anchor.x-size.width,anchor.y,size.width,size.height) display:YES];
+    if(![self windowOnScreen]){
+        [self dockToCorner];
+        _resizeAnchor=NSMakePoint(NSMaxX(_window.frame),NSMinY(_window.frame));
+    }
     [NSUserDefaults.standardUserDefaults setDouble:_scale forKey:@"size"];[self saveOrigin];
 }
 - (void)labelsAction:(id)sender { _pet.showsLabels=!_pet.showsLabels;[NSUserDefaults.standardUserDefaults setBool:_pet.showsLabels forKey:@"labels"]; }
