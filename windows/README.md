@@ -8,7 +8,7 @@
 .\windows\build.ps1
 ```
 
-生成的文件是 `windows/build/键盘小黑猫.exe` 和 `windows/build/键盘小黑猫-1.7.0-Windows安装包.exe`。脚本会从 PATH 或 NSIS 的常规安装位置寻找 `makensis.exe`。需要自定义编译器位置或输出目录时可以使用下面的参数。
+生成的文件是 `windows/build/键盘小黑猫.exe` 和 `windows/build/键盘小黑猫-1.8.0-Windows安装包.exe`。脚本会从 PATH 或 NSIS 的常规安装位置寻找 `makensis.exe`。需要自定义编译器位置或输出目录时可以使用下面的参数。
 
 ```powershell
 .\windows\build.ps1 -Compiler '.\tools\NSIS\makensis.exe' -OutputDirectory '.\artifacts'
@@ -24,4 +24,4 @@
 
 右键点击小猫或通知区域的猫脸图标，打开「小猫大小」。拖动滑块可以在 1% 到 200% 之间实时缩放。左右方向键每次调节 1%，按住 Shift 再按方向键可以微调 0.1%。小猫缩到很小时，仍可从通知区域调大。
 
-在「角色样式」中可选用四只猫或「西装同事」。编译时会把仓库中的 `assets/office-colleague.png` 嵌入便携版。
+在「角色样式」中可选用四只猫或「西装同事」。西装同事待机时正立，光标移到头上会竖起拇指，左键轻点头部会短暂托腮。在其他窗口移动鼠标或敲键时，她会伸手操作桌上的键鼠。便携版内嵌了三张人物姿势图。

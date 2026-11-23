@@ -19,6 +19,10 @@ internal static class WindowsInput
     [DllImport("user32.dll")]
     private static extern uint GetRawInputData(IntPtr message, uint command, IntPtr buffer, ref uint size, uint headerSize);
     [DllImport("user32.dll")] internal static extern bool GetCursorPos(out ScreenPoint pt);
+    [DllImport("user32.dll")] internal static extern IntPtr WindowFromPoint(ScreenPoint pt);
+    [DllImport("user32.dll")] internal static extern IntPtr SetCapture(IntPtr hwnd);
+    [DllImport("user32.dll")] internal static extern IntPtr GetCapture();
+    [DllImport("user32.dll")] internal static extern bool ReleaseCapture();
     [DllImport("user32.dll")] internal static extern short GetAsyncKeyState(int vk);
     [DllImport("user32.dll")] internal static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll")] internal static extern int SetWindowLong(IntPtr hwnd, int index, int value);

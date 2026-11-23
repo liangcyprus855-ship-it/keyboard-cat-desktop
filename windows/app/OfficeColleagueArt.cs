@@ -1,15 +1,21 @@
 using System;
+using System.Collections;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
+internal enum OfficePose { Idle, Working, Hover, Click }
+
 internal static class OfficeColleagueArt
 {
     const double CenterX = 214, Top = 46, Height = 196, HandScale = 1.30;
-    static readonly BitmapSource Figure = LoadFigure();
-    static readonly Rect Bounds = new Rect(CenterX - Height * Figure.PixelWidth / Figure.PixelHeight / 2,
-        Top, Height * Figure.PixelWidth / Figure.PixelHeight, Height);
+    static readonly BitmapSource Figure = LoadFigure("OfficeColleague");
+    static readonly BitmapSource Hover = LoadFigure("OfficeColleague.Hover");
+    static readonly BitmapSource Click = LoadFigure("OfficeColleague.Click");
+    static readonly Rect Bounds = ImageBounds(Figure);
     static readonly BitmapSource Portrait = CropPortrait();
+    static readonly BitArray HeadMask = MakeHeadMask();
+    static readonly DrawingGroup HeadHitSurface = MakeHeadHitSurface();
     static readonly Geometry Hand = Shape(
         "M -4.3,-5.2 C -4.7,-3.3 -5.1,-2.0 -5.4,-0.1 " +
         "C -5.6,1.4 -5.4,3.7 -5.1,4.9 C -4.8,6.0 -3.7,6.0 -3.4,4.9 " +
@@ -26,9 +32,9 @@ internal static class OfficeColleagueArt
     static readonly Pen Crease = Line(0x4c4e5d,.72);
     static readonly Pen SkinEdge = Line(0xe89d70,.62);
 
-    static BitmapSource LoadFigure()
+    static BitmapSource LoadFigure(string name)
     {
-        using (var stream = typeof(OfficeColleagueArt).Assembly.GetManifestResourceStream("KeycatDesktop.OfficeColleague.png"))
+        using (var stream = typeof(OfficeColleagueArt).Assembly.GetManifestResourceStream("KeycatDesktop." + name + ".png"))
         {
             if (stream == null) throw new InvalidOperationException("Missing office colleague image.");
             var bitmap = new BitmapImage();
@@ -37,6 +43,11 @@ internal static class OfficeColleagueArt
             return bitmap;
         }
     }
+    static Rect ImageBounds(BitmapSource bitmap)
+    {
+        double width = Height*bitmap.PixelWidth/bitmap.PixelHeight;
+        return new Rect(CenterX-width/2,Top,width,Height);
+    }
     static BitmapSource CropPortrait()
     {
         int height = (int)Math.Round(Figure.PixelHeight * .67);
@@ -44,6 +55,38 @@ internal static class OfficeColleagueArt
         var crop = new CroppedBitmap(Figure,new Int32Rect((Figure.PixelWidth-width)/2,0,width,height));
         crop.Freeze();
         return crop;
+    }
+    static BitArray MakeHeadMask()
+    {
+        var image = new FormatConvertedBitmap(Figure,PixelFormats.Bgra32,null,0);
+        int width = image.PixelWidth, rows = (int)Math.Ceiling(image.PixelHeight * .605);
+        byte[] pixels = new byte[width * rows * 4];
+        image.CopyPixels(new Int32Rect(0,0,width,rows),pixels,width*4,0);
+        var mask = new BitArray(width*rows);
+        int upper = width * (int)Math.Ceiling(image.PixelHeight * .55);
+        for (int i=0; i<mask.Count; i++)
+        {
+            int n=i*4;
+            // Along the collar, keep the warm face and hair pixels and exclude
+            // the blue jacket and white shirt sharing those same scan lines.
+            mask[i] = pixels[n+3] >= 32 && (i<upper || pixels[n+2]>pixels[n]);
+        }
+        return mask;
+    }
+    static DrawingGroup MakeHeadHitSurface()
+    {
+        int width = Figure.PixelWidth, rows = HeadMask.Count / width;
+        byte[] pixels = new byte[HeadMask.Count * 4];
+        for (int i=0; i<HeadMask.Count; i++)
+            if (HeadMask[i]) pixels[i*4+3] = 1;
+        var bitmap = BitmapSource.Create(width,rows,96,96,PixelFormats.Pbgra32,null,pixels,width*4);
+        bitmap.Freeze();
+        var drawing = new DrawingGroup();
+        RenderOptions.SetBitmapScalingMode(drawing,BitmapScalingMode.NearestNeighbor);
+        using (DrawingContext dc=drawing.Open())
+            dc.DrawImage(bitmap,new Rect(Bounds.X,Top,Bounds.Width,Height*rows/Figure.PixelHeight));
+        drawing.Freeze();
+        return drawing;
     }
     static Geometry Shape(string path) { var g = Geometry.Parse(path); g.Freeze(); return g; }
     static Color ColorOf(int rgb)
@@ -67,37 +110,26 @@ internal static class OfficeColleagueArt
         dc.DrawImage(Portrait,new Rect(0,0,60.0*Portrait.PixelWidth/Portrait.PixelHeight,60));
     }
 
-    static double Lean(Point mouseHand)
+    public static bool ContainsHead(Point p)
     {
-        double u = Math.Max(0,Math.Min(1,(157-mouseHand.X)/50));
-        return u*u*(3-2*u);
+        if (p.X < Bounds.Left || p.X >= Bounds.Right || p.Y < Top || p.Y >= Top + Height*.605) return false;
+        int x=(int)((p.X-Bounds.Left)*Figure.PixelWidth/Bounds.Width);
+        int y=(int)((p.Y-Top)*Figure.PixelHeight/Height);
+        return HeadMask[y*Figure.PixelWidth+x];
     }
-    static Matrix Pose(double t,double gx,double gy,double lean,double blink)
+    public static void Draw(DrawingContext dc, OfficePose pose, Point left, Point right, bool interactive = false)
     {
-        double shear = .078*lean-.008*gx;
-        double stretch = (Math.Sin(t*1.7)*.38 + gy*.35 - blink*1.1)/Height;
-        double baseY = Bounds.Bottom;
-        return new Matrix(1,0,shear,1+stretch,-shear*baseY,-stretch*baseY);
-    }
-    public static bool ContainsHead(Point p,double t,double gx,double gy,Point leftHand)
-    {
-        Matrix m=Pose(t,gx,gy,Lean(leftHand),0);
-        m.Invert(); p=m.Transform(p);
-        double dx=(p.X-CenterX)/(Bounds.Width*.43), dy=(p.Y-Top-Height*.32)/(Height*.32);
-        return dx*dx+dy*dy<1;
-    }
-    public static void DrawBody(DrawingContext dc,double t,double gx,double gy,double lean,double blink)
-    {
-        dc.PushTransform(new MatrixTransform(Pose(t,gx,gy,lean,blink)));
-        dc.DrawImage(Figure,Bounds); dc.Pop();
-    }
-    public static void Draw(DrawingContext dc,double t,double gx,double gy,double blink,Point left,Point right)
-    {
-        double lean=Lean(left);
-        Matrix pose=Pose(t,gx,gy,lean,blink);
-        DrawBody(dc,t,gx,gy,lean,blink);
-        DrawArm(dc,pose.Transform(new Point(246,172)),right,1);
-        DrawArm(dc,pose.Transform(new Point(182,172)),left,-1);
+        BitmapSource picture = pose == OfficePose.Click ? Click : pose == OfficePose.Hover ? Hover : Figure;
+        // Layered HWNDs pass fully transparent pixels to whatever lies behind
+        // them. Keep the original head target present when a pose shifts its hair.
+        if (interactive && (pose == OfficePose.Hover || pose == OfficePose.Click))
+            dc.DrawDrawing(HeadHitSurface);
+        dc.DrawImage(picture,ImageBounds(picture));
+        if (pose == OfficePose.Working)
+        {
+            DrawArm(dc,new Point(246,172),right,1);
+            DrawArm(dc,new Point(182,172),left,-1);
+        }
     }
 
     static Vector Unit(Vector v) { return v.LengthSquared>.000001 ? v/v.Length : new Vector(0,1); }

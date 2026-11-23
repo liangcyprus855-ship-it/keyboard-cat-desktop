@@ -161,7 +161,16 @@ static NSSize PetSize(double ratio) {
     NSRect f=display.frame;NSPoint norm=NSZeroPoint;
     if(f.size.width>0&&f.size.height>0)norm=NSMakePoint(2*(p.x-NSMinX(f))/f.size.width-1,1-2*(p.y-NSMinY(f))/f.size.height);
     NSUInteger buttons=NSEvent.pressedMouseButtons;
-    if(!_menuOpen&&!NSApp.modalWindow)[_pet samplePointer:local onScreen:norm left:(buttons&1)!=0 right:(buttons&2)!=0 at:t];
+    if(!_menuOpen&&!NSApp.modalWindow) {
+        BOOL headInteractive=NO;
+        if(_pet.catStyle==4 && !_through && NSPointInRect(p,_window.frame) && [_pet officeHeadAt:local]) {
+            NSInteger front=[NSWindow windowNumberAtPoint:p belowWindowWithWindowNumber:0];
+            // A pose transition can briefly expose the window underneath before the new frame is displayed.
+            headInteractive=front==_window.windowNumber ||
+                front==[NSWindow windowNumberAtPoint:p belowWindowWithWindowNumber:_window.windowNumber];
+        }
+        [_pet samplePointer:local onScreen:norm left:(buttons&1)!=0 right:(buttons&2)!=0 headInteractive:headInteractive at:t];
+    }
     [_pet advance:t];
 }
 - (void)permissionAction:(id)sender {
@@ -210,6 +219,7 @@ static NSSize PetSize(double ratio) {
 - (void)menuNeedsUpdate:(NSMenu *)menu { if(menu==_menu && !_menuOpen)[self rebuildMenu]; }
 - (void)menuWillOpen:(NSMenu *)menu {
     _menuOpen=YES;
+    [_pet cancelHeadGesture];
     _resizeAnchor=NSMakePoint(NSMaxX(_window.frame),NSMinY(_window.frame));
 }
 - (void)menuDidClose:(NSMenu *)menu { _menuOpen=NO; }
@@ -262,7 +272,11 @@ static NSSize PetSize(double ratio) {
 - (void)labelsAction:(id)sender { _pet.showsLabels=!_pet.showsLabels;[NSUserDefaults.standardUserDefaults setBool:_pet.showsLabels forKey:@"labels"]; }
 - (void)topAction:(id)sender { _alwaysOnTop=!_alwaysOnTop;_window.level=_alwaysOnTop?NSFloatingWindowLevel:NSNormalWindowLevel;
     [NSUserDefaults.standardUserDefaults setBool:_alwaysOnTop forKey:@"alwaysOnTop"]; }
-- (void)throughAction:(id)sender { _through=!_through;_window.ignoresMouseEvents=_through;[NSUserDefaults.standardUserDefaults setBool:_through forKey:@"mouseThrough"]; }
+- (void)throughAction:(id)sender {
+    _through=!_through;_window.ignoresMouseEvents=_through;
+    [_pet cancelHeadGesture];
+    [NSUserDefaults.standardUserDefaults setBool:_through forKey:@"mouseThrough"];
+}
 - (void)showPet {
     if(![self windowOnScreen])[self dockToCorner];[_window orderFrontRegardless];[self refreshTap];
 }

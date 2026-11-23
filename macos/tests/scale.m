@@ -45,6 +45,73 @@ static NSData *Frame(KCPetView *view) {
     [view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
     return [NSData dataWithBytes:rep.bitmapData length:rep.bytesPerRow*rep.pixelsHigh];
 }
+// Test only the pet's local event handlers. Never move the actual pointer or window.
+@interface PoseTestPanel : NSPanel
+@property(nonatomic) NSUInteger dragCount;
+@end
+@implementation PoseTestPanel
+- (void)performWindowDragWithEvent:(NSEvent *)event { self.dragCount++; }
+@end
+static NSEvent *LocalMouse(KCPetView *view,NSEventType type,NSPoint scene,double time) {
+    NSPoint point=NSMakePoint((scene.x-75)*view.bounds.size.width/306,(scene.y-9)*view.bounds.size.height/298);
+    return [NSEvent mouseEventWithType:type location:[view convertPoint:point toView:nil] modifierFlags:0 timestamp:time
+        windowNumber:view.window.windowNumber context:nil eventNumber:1 clickCount:1 pressure:1];
+}
+static void Pointer(KCPetView *view,NSPoint scene,BOOL interactive,double time) {
+    [view samplePointer:scene onScreen:NSZeroPoint left:NO right:NO headInteractive:interactive at:time];
+    [view advance:time];
+}
+static void CheckOfficePoses(void) {
+    NSRect bounds=NSMakeRect(0,0,306,298);
+    PoseTestPanel *panel=[[PoseTestPanel alloc] initWithContentRect:bounds styleMask:NSWindowStyleMaskBorderless
+        backing:NSBackingStoreBuffered defer:NO];
+    KCPetView *view=[[KCPetView alloc] initWithFrame:bounds];
+    panel.contentView=view;view.catStyle=4;
+    NSPoint head=NSMakePoint(214,105), ear=NSMakePoint(161,124),away=NSMakePoint(302,280);
+    NSPoint clear=NSMakePoint(207,47),lapel=NSMakePoint(214,196);
+    Check([view officeHeadAt:head] && [view officeHeadAt:ear] && [view officeHeadAt:NSMakePoint(267,124)],@"face and both ears are interactive");
+    Check(![view officeHeadAt:clear] && ![view officeHeadAt:lapel],@"clear hair corner and suit are excluded");
+    double t=NSProcessInfo.processInfo.systemUptime;
+    Pointer(view,away,NO,t);
+    Check(view.officeState==KCOfficeIdle,@"stationary upright idle");
+    [view strike:65 label:@"A" at:t+.05];[view advance:t+.1];
+    Check(view.officeState==KCOfficeWorking,@"keyboard activates working arms");
+    [view advance:t+.84];Check(view.officeState==KCOfficeWorking,@"input remains active before .8 s");
+    [view advance:t+.86];Check(view.officeState==KCOfficeIdle,@"input expires after .8 s");
+    Pointer(view,ear,YES,t+1);
+    Check(view.officeState==KCOfficeHover,@"ear hover overrides movement");
+    for(int i=0;i<10;i++)Pointer(view,ear,YES,t+1.1+i*.1);
+    Check(view.officeState==KCOfficeHover,@"stable hover at the ear");
+    [view button:1 down:YES at:t+2.1];[view advance:t+2.1];
+    Check(view.officeState==KCOfficeHover,@"a global right click cannot start a head reaction");
+    [view button:1 down:NO at:t+2.12];
+    [view mouseDown:LocalMouse(view,NSEventTypeLeftMouseDown,ear,t+2.15)];
+    [view mouseUp:LocalMouse(view,NSEventTypeLeftMouseUp,ear,t+2.16)];
+    Pointer(view,ear,YES,t+3.65);Check(view.officeState==KCOfficeClick,@"local head click holds for 1.5 seconds");
+    Pointer(view,ear,YES,t+3.67);Check(view.officeState==KCOfficeHover,@"expired click returns to hover");
+    [view mouseDown:LocalMouse(view,NSEventTypeLeftMouseDown,head,t+4)];
+    [view mouseUp:LocalMouse(view,NSEventTypeLeftMouseUp,head,t+4.01)];
+    Pointer(view,away,NO,t+4.2);
+    Check(view.officeState==KCOfficeClick,@"click survives leaving the head");
+    [view strike:65 label:@"A" at:t+5.4];[view advance:t+5.52];
+    Check(view.officeState==KCOfficeWorking,@"expired click resumes ongoing typing");
+    [view advance:t+6.3];Check(view.officeState==KCOfficeIdle,@"returns to idle away from head");
+    [view mouseDown:LocalMouse(view,NSEventTypeLeftMouseDown,head,t+7)];
+    [view mouseDragged:LocalMouse(view,NSEventTypeLeftMouseDragged,ear,t+7.02)];
+    [view mouseUp:LocalMouse(view,NSEventTypeLeftMouseUp,head,t+7.05)];
+    Check(panel.dragCount==1 && view.officeState!=KCOfficeClick,@"drag cannot become a head click");
+    [view mouseDown:LocalMouse(view,NSEventTypeLeftMouseDown,head,t+7.1)];[view cancelHeadGesture];
+    [view mouseUp:LocalMouse(view,NSEventTypeLeftMouseUp,head,t+7.15)];
+    Check(view.officeState!=KCOfficeClick,@"cancelled mouse capture");
+    [view mouseDown:LocalMouse(view,NSEventTypeLeftMouseDown,clear,t+7.2)];
+    [view mouseUp:LocalMouse(view,NSEventTypeLeftMouseUp,clear,t+7.22)];
+    Check(view.officeState!=KCOfficeClick,@"transparent pixel cannot trigger the reaction");
+    panel.ignoresMouseEvents=YES;
+    [view mouseDown:LocalMouse(view,NSEventTypeLeftMouseDown,head,t+7.3)];
+    [view mouseUp:LocalMouse(view,NSEventTypeLeftMouseUp,head,t+7.31)];
+    Pointer(view,head,NO,t+7.32);
+    Check(view.officeState!=KCOfficeClick && view.officeState!=KCOfficeHover,@"click-through suppresses head reactions");
+}
 static void CheckOffice(KCPetView *view, NSMenu *menu) {
     NSMenu *roles=[menu itemWithTitle:@"角色样式"].submenu;
     Check(roles.numberOfItems==5,@"five role choices");
@@ -59,7 +126,7 @@ static void CheckOffice(KCPetView *view, NSMenu *menu) {
     Near([[view valueForKey:@"left"] pointValue].x,[[view valueForKey:@"mousePaw"] pointValue].x,.001,@"resting mouse hand");
     Near([[view valueForKey:@"right"] pointValue].y,[[view valueForKey:@"spaceKey"] pointValue].y,.001,@"resting keyboard hand");
     double t=NSProcessInfo.processInfo.systemUptime;
-    [view samplePointer:NSMakePoint(120,220) onScreen:NSMakePoint(-.6,.2) left:YES right:NO at:t];
+    [view samplePointer:NSMakePoint(120,220) onScreen:NSMakePoint(-.6,.2) left:YES right:NO headInteractive:NO at:t];
     for (int i=1;i<=12;i++) [view advance:t+i*.01];
     NSPoint mouseHand=[[view valueForKey:@"left"] pointValue];
     NSPoint freeHand=[[view valueForKey:@"right"] pointValue];
@@ -108,7 +175,10 @@ int main(int argc,const char *argv[]) {
         const double startup=[expected[scenario] doubleValue];
         Near(slider.doubleValue,startup,.000001,@"launch scale");
         CheckWindow(window,startup);
-        if ([scenario isEqual:@"office"]) CheckOffice((KCPetView *)window.contentView,menu);
+        if ([scenario isEqual:@"office"]) {
+            CheckOffice((KCPetView *)window.contentView,menu);
+            CheckOfficePoses();
+        }
         if ([scenario isEqual:@"office-restored"]) {
             Check(((KCPetView *)window.contentView).catStyle==4,@"office character restored after restart");
             Check([menu itemWithTitle:@"角色大小"]!=nil,@"office size menu label");

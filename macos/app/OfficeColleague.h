@@ -8,15 +8,47 @@ static CGRect KCOfficeBounds(NSImage *image) {
     CGFloat width=196*image.size.width/image.size.height;
     return CGRectMake(214-width/2,46,width,196);
 }
-static CGAffineTransform KCOfficePose(double t,double gx,double gy,double lean,double blink) {
-    double shear=.078*lean-.008*gx,stretch=(sin(t*1.7)*.38+gy*.35-blink*1.1)/196;
-    return CGAffineTransformMake(1,0,shear,1+stretch,-shear*242,-stretch*242);
+static NSData *KCOfficeHeadMask(NSImage *image,size_t *width,size_t *height) {
+    CGImageRef original=[image CGImageForProposedRect:NULL context:nil hints:nil];
+    if(!original)return nil;
+    *width=CGImageGetWidth(original);*height=CGImageGetHeight(original);
+    CGColorSpaceRef space=CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    NSMutableData *rgba=[NSMutableData dataWithLength:*width * *height * 4];
+    CGContextRef context=CGBitmapContextCreate(rgba.mutableBytes,*width,*height,8,4 * *width,space,
+                                               kCGBitmapByteOrder32Big|kCGImageAlphaPremultipliedLast);
+    CGColorSpaceRelease(space);
+    if(!context)return nil;
+    CGContextDrawImage(context,CGRectMake(0,0,*width,*height),original);
+    CGContextRelease(context);
+    size_t rows=(size_t)ceil(.605 * *height);
+    NSMutableData *mask=[NSMutableData dataWithLength:rows * *width];
+    const uint8_t *pixels=rgba.bytes;
+    uint8_t *out=mask.mutableBytes;
+    for(size_t y=0;y<rows;y++)for(size_t x=0;x<*width;x++) {
+        size_t i=y * *width+x;
+        // At the chin and hair tips, distinguish warm skin and hair from the cool jacket.
+        out[i]=pixels[4*i+3]>=32 && (y < .55 * *height || pixels[4*i]>pixels[4*i+2]);
+    }
+    return mask;
 }
-static BOOL KCOfficeHitsHead(NSImage *image,CGPoint p,CGAffineTransform pose) {
-    CGRect body=KCOfficeBounds(image);
-    p=CGPointApplyAffineTransform(p,CGAffineTransformInvert(pose));
-    double x=(p.x-214)/(body.size.width*.43),y=(p.y-46-196*.32)/(196*.32);
-    return x*x+y*y<1;
+static BOOL KCOfficeHitsHead(CGRect body,NSData *mask,size_t width,size_t height,CGPoint p) {
+    if(!mask || !CGRectContainsPoint(body,p) || p.y-body.origin.y>=body.size.height*.605)return NO;
+    size_t px=(size_t)((p.x-body.origin.x)*width/body.size.width);
+    size_t py=(size_t)((p.y-body.origin.y)*height/body.size.height);
+    return px<width && py*width+px<mask.length && ((const uint8_t *)mask.bytes)[py*width+px]!=0;
+}
+static NSImage *KCOfficeHitBacking(NSData *mask,size_t width) {
+    if(!width || !mask.length)return nil;
+    size_t rows=mask.length/width;
+    NSBitmapImageRep *rep=[[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:width pixelsHigh:rows
+        bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace
+        bytesPerRow:width*4 bitsPerPixel:32];
+    if(!rep.bitmapData)return nil;
+    memset(rep.bitmapData,0,rows*rep.bytesPerRow);
+    const uint8_t *hit=mask.bytes;
+    for(size_t i=0;i<mask.length;i++)rep.bitmapData[i*4+3]=hit[i]; // 0 or 1 out of 255.
+    NSImage *backing=[[NSImage alloc] initWithSize:NSMakeSize(width,rows)];
+    [backing addRepresentation:rep];return backing;
 }
 static CGPoint OCShift(CGPoint p,CGPoint vector,CGFloat scale) {
     return CGPointMake(p.x+vector.x*scale,p.y+vector.y*scale);
@@ -124,13 +156,5 @@ static void KCOfficeArm(CGContextRef ctx,CGPoint shoulder,CGPoint target,int sid
     OCPaint(ctx,cuff,OCShirt,0,0);CGPathRelease(cuff);
     CGContextTranslateCTM(ctx,palm.x,palm.y);CGContextRotateCTM(ctx,radians);CGContextScaleCTM(ctx,-side*handScale,handScale);
     OCPaint(ctx,OCHand(),OCSkin,0xe89d70,.62);CGContextRestoreGState(ctx);
-}
-static void KCOfficeDraw(CGContextRef ctx,NSImage *image,CGAffineTransform pose,CGPoint left,CGPoint right) {
-    CGContextSaveGState(ctx);CGContextConcatCTM(ctx,pose);
-    [image drawInRect:KCOfficeBounds(image) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
-             fraction:1 respectFlipped:YES hints:nil];
-    CGContextRestoreGState(ctx);
-    KCOfficeArm(ctx,CGPointApplyAffineTransform(CGPointMake(246,172),pose),right,1);
-    KCOfficeArm(ctx,CGPointApplyAffineTransform(CGPointMake(182,172),pose),left,-1);
 }
 #endif

@@ -29,6 +29,7 @@ internal sealed class CatScene : FrameworkElement
     private double lastMove = -10, leftClickAt = -10, rightClickAt = -10, lastPet = -10, nextBlink = 2.7;
     private double gazeX, gazeY, blink, leftActivity, rightActivity;
     private CatStyle previousCharacter = CatStyle.Black;
+    private double officeClickUntil = -1, lastOfficeInput = -10;
     public bool LabelsEnabled = true;
     public CatStyle Cat = CatStyle.Black;
     public KeyboardStyle Keyboard = KeyboardStyle.Classic;
@@ -37,10 +38,32 @@ internal sealed class CatScene : FrameworkElement
 
     public void ClearLabels() { caps.Clear(); InvalidateVisual(); }
 
+    public void ResetOfficeInteraction()
+    {
+        officeClickUntil = -1;
+        lastOfficeInput = -10;
+        headHovered = false;
+        pointerKnown = false;
+    }
+    public void ClickOfficeHead(double now)
+    {
+        if (Cat != CatStyle.OfficeColleague) return;
+        officeClickUntil = now + 1.5;
+        InvalidateVisual();
+    }
+    private OfficePose CurrentOfficePose()
+    {
+        if (time < officeClickUntil) return OfficePose.Click;
+        if (headHovered) return OfficePose.Hover;
+        if (lastOfficeInput >= 0 && (leftDown || rightDown || time - lastOfficeInput < .8)) return OfficePose.Working;
+        return OfficePose.Idle;
+    }
+
     public void Strike(int vk, double now)
     {
         Point target = DeskArt.KeyPoint(vk);
         lastKey = now;
+        if (Cat == CatStyle.OfficeColleague) lastOfficeInput = now;
         strikes[vk] = now;
         if (!UsingMouse(now) && (target.X < 218 || (vk == 32 && rightAt > leftAt)))
         {
@@ -73,6 +96,11 @@ internal sealed class CatScene : FrameworkElement
 
     public void Pointer(Point p, bool physicalLeft, bool physicalRight, double now, Vector positionOnMonitor)
     {
+        Pointer(p,physicalLeft,physicalRight,now,positionOnMonitor,true);
+    }
+
+    public void Pointer(Point p, bool physicalLeft, bool physicalRight, double now, Vector positionOnMonitor, bool canHover)
+    {
         Vector delta = p - lastPointer;
         if (pointerKnown && delta.LengthSquared > .000001)
         {
@@ -81,7 +109,7 @@ internal sealed class CatScene : FrameworkElement
             MarkMouseActivity(now);
         }
         monitorPosition = positionOnMonitor;
-        bool onHead = CatArt.ContainsHead(Cat,p,time,gazeX,gazeY,left);
+        bool onHead = canHover && CatArt.ContainsHead(Cat,p,time,gazeX,gazeY,left);
         if (onHead && !headHovered) lastPet = now;
         headHovered = onHead;
         pointerKnown = true;
@@ -111,6 +139,7 @@ internal sealed class CatScene : FrameworkElement
 
     private void MarkMouseActivity(double now)
     {
+        if (Cat == CatStyle.OfficeColleague) lastOfficeInput = now;
         // A key-down can arrive just before the next cursor sample.
         if (!UsingMouse(now) && leftAt > rightAt && now - leftAt < .24)
         {
@@ -215,7 +244,10 @@ internal sealed class CatScene : FrameworkElement
         dc.PushTransform(new ScaleTransform(ActualWidth / CanvasWidth, ActualHeight / CanvasHeight));
         DeskArt.DrawDesk(dc, highlights, ClickGlow(leftDown, leftClickAt), ClickGlow(rightDown, rightClickAt),
             Keyboard, Mouse, mouseOffset);
-        CatArt.DrawStyled(dc, Cat, time, gazeX, gazeY, blink, left, right, leftActivity, rightActivity);
+        if (Cat == CatStyle.OfficeColleague)
+            OfficeColleagueArt.Draw(dc, CurrentOfficePose(), left, right, PresentationSource.FromVisual(this) != null);
+        else
+            CatArt.DrawStyled(dc, Cat, time, gazeX, gazeY, blink, left, right, leftActivity, rightActivity);
         for (int i = 0; i < caps.Count; i++)
         {
             Cap cap = caps[i];

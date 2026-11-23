@@ -15,7 +15,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("键盘小黑猫")]
 [assembly: AssemblyDescription("会跟着键盘和鼠标一起动的小黑猫桌宠")]
-[assembly: AssemblyVersion("1.7.0.0")]
+[assembly: AssemblyVersion("1.8.0.0")]
 internal static class Program
 {
     [STAThread]
@@ -53,7 +53,7 @@ internal sealed class PetWindow : Window
     private bool listening, menuOpen;
     private Point? dragStart;
     private Point dragOrigin;
-    private bool dragging;
+    private bool dragging, officeHeadPressed;
     private HwndSource source;
 
     public PetWindow()
@@ -85,10 +85,11 @@ internal sealed class PetWindow : Window
         menu.Closed += delegate { menuOpen = false; };
         MouseLeftButtonDown += BeginDrag;
         MouseMove += ContinueDrag;
-        MouseLeftButtonUp += delegate { EndDrag(); };
+        MouseLeftButtonUp += delegate { if (settings.Cat != CatStyle.OfficeColleague) EndDrag(); };
         LostMouseCapture += delegate { if (dragStart.HasValue) EndDrag(); };
         MouseRightButtonUp += delegate(object sender, MouseButtonEventArgs e)
         {
+            officeHeadPressed = false;
             menu.Show(Forms.Cursor.Position); e.Handled = true;
         };
         Cursor = Cursors.Hand;
@@ -122,6 +123,10 @@ internal sealed class PetWindow : Window
 
     private IntPtr Messages(IntPtr window, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (settings.Cat == CatStyle.OfficeColleague && HandleOfficePointer(msg,wParam,lParam))
+        {
+            handled = true; return IntPtr.Zero;
+        }
         if (msg == 0xFF && listening && IsVisible && !menuOpen && inputBuffer != IntPtr.Zero)
         {
             WindowsInput.Process(lParam, inputBuffer, cat, clock.Elapsed.TotalSeconds);
@@ -162,7 +167,9 @@ internal sealed class PetWindow : Window
                 2.0 * (screen.Y - cursorMonitor.Top) / Math.Max(1, cursorMonitor.Height - 1) - 1);
             bool leftDown = WindowsInput.GetAsyncKeyState(1) < 0;
             bool rightDown = WindowsInput.GetAsyncKeyState(2) < 0;
-            cat.Pointer(new Point(p.X / settings.Scale, p.Y / settings.Scale), leftDown, rightDown, now, onMonitor);
+            bool canHover = settings.Cat != CatStyle.OfficeColleague ||
+                (!menuOpen && !dragging && !settings.ClickThrough && WindowsInput.WindowFromPoint(screen) == hwnd);
+            cat.Pointer(new Point(p.X / settings.Scale, p.Y / settings.Scale), leftDown, rightDown, now, onMonitor, canHover);
         }
         cat.Advance(now);
     }
@@ -174,23 +181,79 @@ internal sealed class PetWindow : Window
     }
     private void BeginDrag(object sender, MouseButtonEventArgs e)
     {
-        if (settings.ClickThrough) return;
+        if (settings.ClickThrough || settings.Cat == CatStyle.OfficeColleague) return;
         dragStart = CursorInDips();
         dragOrigin = new Point(Left, Top);
         CaptureMouse(); e.Handled = true;
     }
+    private bool HandleOfficePointer(int msg, IntPtr buttons, IntPtr position)
+    {
+        const int Down = 0x201, Up = 0x202, DoubleDown = 0x203, Move = 0x200;
+        if (msg == 0x215 || msg == 0x1F) // capture changed or modal operation cancelled
+        {
+            if (dragStart.HasValue) EndDrag();
+            return false;
+        }
+        if (msg == 0x204) officeHeadPressed = false;
+        bool startsGesture = msg == Down || msg == DoubleDown;
+        bool continuesGesture = dragStart.HasValue && (msg == Move || msg == Up);
+        if (!startsGesture && !continuesGesture) return false;
+        if (settings.ClickThrough || menuOpen || source == null) return false;
+
+        // Use the point delivered with this button message. The global cursor
+        // sample may already be elsewhere when a quick press reaches the window.
+        int packed = unchecked((int)position.ToInt64());
+        Point client = source.CompositionTarget.TransformFromDevice.Transform(
+            new Point((short)(packed & 0xffff),(short)(packed >> 16)));
+        Point screen = source.CompositionTarget.TransformFromDevice.Transform(PointToScreen(client));
+        bool head = OfficeColleagueArt.ContainsHead(new Point(75+client.X/settings.Scale,9+client.Y/settings.Scale));
+        bool rightPressed = (buttons.ToInt64() & 2) != 0;
+        if (startsGesture)
+        {
+            WindowsInput.SetCapture(hwnd);
+            if (WindowsInput.GetCapture() == hwnd)
+            {
+                dragStart = screen; dragOrigin = new Point(Left,Top);
+                officeHeadPressed = head && !rightPressed;
+            }
+        }
+        else if (msg == Move)
+        {
+            if ((buttons.ToInt64() & 1) != 0) MoveDrag(screen);
+        }
+        else
+        {
+            bool clicked = WindowsInput.GetCapture() == hwnd && officeHeadPressed && head &&
+                           !rightPressed && !dragging && !BeyondDragThreshold(screen-dragStart.Value);
+            EndDrag();
+            if (clicked) cat.ClickOfficeHead(clock.Elapsed.TotalSeconds);
+        }
+        return true;
+    }
+    private bool BeyondDragThreshold(Vector movement)
+    {
+        if (settings.Cat != CatStyle.OfficeColleague) return movement.Length >= 4;
+        return Math.Abs(movement.X) >= SystemParameters.MinimumHorizontalDragDistance ||
+               Math.Abs(movement.Y) >= SystemParameters.MinimumVerticalDragDistance;
+    }
     private void ContinueDrag(object sender, MouseEventArgs e)
     {
-        if (!dragStart.HasValue || e.LeftButton != MouseButtonState.Pressed) return;
-        Vector delta = CursorInDips() - dragStart.Value;
-        if (!dragging && delta.Length < 4) return;
+        if (settings.Cat == CatStyle.OfficeColleague || !dragStart.HasValue || e.LeftButton != MouseButtonState.Pressed) return;
+        MoveDrag(CursorInDips());
+    }
+    private void MoveDrag(Point screen)
+    {
+        Vector delta = screen - dragStart.Value;
+        if (!dragging && !BeyondDragThreshold(delta)) return;
         dragging = true;
         Left = dragOrigin.X + delta.X; Top = dragOrigin.Y + delta.Y;
     }
     private void EndDrag()
     {
-        dragStart = null;
+        dragStart = null; officeHeadPressed = false;
         if (IsMouseCaptured) ReleaseMouseCapture();
+        else if (settings.Cat == CatStyle.OfficeColleague && WindowsInput.GetCapture() == hwnd)
+            WindowsInput.ReleaseCapture();
         if (dragging) { dragging = false; if (!InView()) DockToCorner(); Save(); }
     }
     private Rect LogicalArea(Drawing.Rectangle r)
@@ -264,10 +327,13 @@ internal sealed class PetWindow : Window
     }
     private void BuildMenu(object sender, CancelEventArgs e)
     {
+        if (settings.Cat == CatStyle.OfficeColleague && dragStart.HasValue) EndDrag();
         menuOpen = true;
         while (menu.Items.Count > 0) menu.Items[0].Dispose();
         menu.Items.Add(styleMenu.Characters(settings.Cat, delegate(CatStyle next)
         {
+            if (settings.Cat == CatStyle.OfficeColleague || next == CatStyle.OfficeColleague)
+                cat.ResetOfficeInteraction();
             settings.Cat = cat.Cat = next;
             cat.InvalidateVisual(); Save();
         }));

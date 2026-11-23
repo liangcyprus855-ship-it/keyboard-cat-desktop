@@ -8,6 +8,6 @@
   <conclusion file="finish.html" mime-type="text/html"/>
   <choices-outline><line choice="keycat"/></choices-outline>
   <choice id="keycat" visible="false" title="键盘小黑猫"><pkg-ref id="local.keycat.desktop.pkg"/></choice>
-  <pkg-ref id="local.keycat.desktop.pkg" version="1.7.0" onConclusion="none">#Keycat.pkg</pkg-ref>
+  <pkg-ref id="local.keycat.desktop.pkg" version="1.8.0" onConclusion="none">#Keycat.pkg</pkg-ref>
   <pkg-ref id="local.keycat.desktop.pkg"><must-close><app id="local.keycat.desktop"/></must-close></pkg-ref>
 </installer-gui-script>

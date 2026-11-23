@@ -25,10 +25,21 @@ static double Pulse(double age,double duration) {
 @implementation KCCap
 @end
 
+static NSImage *OfficeImage(NSString *name) {
+    NSURL *url=[NSBundle.mainBundle URLForResource:name withExtension:@"png"];
+    return url?[[NSImage alloc] initWithContentsOfURL:url]:nil;
+}
+
 @implementation KCPetView {
     NSDictionary *_sprites, *_keys;
     NSURL *_assetDir;
-    NSImage *_officeFigure;
+    NSImage *_officeFigure,*_officeHover,*_officeClick,*_headBacking;
+    NSData *_headAlpha;
+    size_t _alphaWidth,_alphaHeight;
+    NSEvent *_headPress;
+    NSPoint _pressScreen;
+    BOOL _draggingHead;
+    double _clickUntil;
     NSMutableDictionary<NSString *,NSImage *> *_images;
     NSMutableDictionary<NSNumber *,NSNumber *> *_keysDown;
     NSMutableArray<KCCap *> *_caps;
@@ -42,8 +53,11 @@ static double Pulse(double age,double duration) {
 - (instancetype)initWithFrame:(NSRect)frame {
     self=[super initWithFrame:frame]; if(!self)return nil;
     _assetDir=[[[NSBundle mainBundle] resourceURL] URLByAppendingPathComponent:@"Art" isDirectory:YES];
-    NSURL *officeURL=[NSBundle.mainBundle URLForResource:@"office-colleague" withExtension:@"png"];
-    if(officeURL) _officeFigure=[[NSImage alloc] initWithContentsOfURL:officeURL];
+    _officeFigure=OfficeImage(@"office-colleague");
+    _officeHover=OfficeImage(@"office-colleague-hover");
+    _officeClick=OfficeImage(@"office-colleague-click");
+    _headAlpha=KCOfficeHeadMask(_officeFigure,&_alphaWidth,&_alphaHeight);
+    _headBacking=KCOfficeHitBacking(_headAlpha,_alphaWidth);
     NSData *data=[NSData dataWithContentsOfURL:[_assetDir URLByAppendingPathComponent:@"atlas.json"]];
     NSDictionary *atlas=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:NULL]:nil;
     if([atlas isKindOfClass:NSDictionary.class]) {
@@ -53,14 +67,57 @@ static double Pulse(double age,double duration) {
     _images=[NSMutableDictionary dictionary];_keysDown=[NSMutableDictionary dictionary];_caps=[NSMutableArray array];
     [self clearInput];_showsLabels=YES; return self;
 }
-- (BOOL)hasArt { return _sprites[@"body-3"] && _sprites[@"portrait-4"] && _keys.count>0 && _officeFigure.valid; }
+- (BOOL)hasArt { return _sprites[@"body-3"] && _sprites[@"portrait-4"] && _keys.count>0 && _headAlpha && _officeHover.valid && _officeClick.valid; }
 - (BOOL)isFlipped { return YES; }
 - (BOOL)isOpaque { return NO; }
 - (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
-- (void)mouseDown:(NSEvent *)event { [self.window performWindowDragWithEvent:event]; }
+- (BOOL)officeHeadAt:(NSPoint)point {
+    return _catStyle==4 && KCOfficeHitsHead(KCOfficeBounds(_officeFigure),_headAlpha,_alphaWidth,_alphaHeight,point);
+}
+- (NSPoint)scenePointForEvent:(NSEvent *)event {
+    NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];
+    return NSMakePoint(75+p.x*306/self.bounds.size.width,9+p.y*298/self.bounds.size.height);
+}
+- (void)cancelHeadGesture {
+    _headPress=nil;_headHovered=NO;_draggingHead=NO;
+}
+- (void)mouseDown:(NSEvent *)event {
+    if(_catStyle!=4){[self.window performWindowDragWithEvent:event];return;}
+    [self cancelHeadGesture];
+    if(self.window.ignoresMouseEvents || event.type!=NSEventTypeLeftMouseDown)return;
+    if(event.modifierFlags&NSEventModifierFlagControl) {
+        [NSMenu popUpContextMenu:self.menu withEvent:event forView:self];return;
+    }
+    if([self officeHeadAt:[self scenePointForEvent:event]] && event.clickCount==1) {
+        _headPress=event;_headHovered=YES;
+        _pressScreen=[self.window convertPointToScreen:event.locationInWindow];
+    } else {
+        _draggingHead=(_catStyle==4);
+        [self.window performWindowDragWithEvent:event];
+    }
+}
+- (BOOL)pastDragThreshold:(NSEvent *)event {
+    NSPoint p=[self.window convertPointToScreen:event.locationInWindow];
+    return fabs(p.x-_pressScreen.x)>=4 || fabs(p.y-_pressScreen.y)>=4;
+}
+- (void)mouseDragged:(NSEvent *)event {
+    if(!_headPress || ![self pastDragThreshold:event])return;
+    NSEvent *down=_headPress;
+    _headPress=nil;_headHovered=NO;_draggingHead=YES;
+    [self.window performWindowDragWithEvent:down];
+}
+- (void)mouseUp:(NSEvent *)event {
+    if(_headPress && _headPress.window==event.window && event.type==NSEventTypeLeftMouseUp &&
+       !self.window.ignoresMouseEvents && ![self pastDragThreshold:event] && [self officeHeadAt:[self scenePointForEvent:event]]) {
+        _clickUntil=event.timestamp+1.5;
+        self.needsDisplay=YES;
+    }
+    _headPress=nil;_draggingHead=NO;
+}
 - (void)setCatStyle:(NSInteger)style {
     if(_catStyle==style)return;
     _catStyle=style;
+    [self cancelHeadGesture];_clickUntil=0;
     if(style==4)[self restOfficeHands];
     self.needsDisplay=YES;
 }
@@ -73,6 +130,7 @@ static double Pulse(double age,double duration) {
     [_keysDown removeAllObjects];[_caps removeAllObjects];
     _left=_freeLeft=NSMakePoint(192,233);_right=NSMakePoint(229,233);
     _travel=_offset=NSZeroPoint;_pointerKnown=NO;_leftDown=_rightDown=_headHovered=NO;
+    [self cancelHeadGesture];_clickUntil=0;
     _time=NSProcessInfo.processInfo.systemUptime;
     _lastMove=_lastKey=_leftAt=_rightAt=_leftClick=_rightClick=_lastPet=_time-10;
     _nextBlink=_time+2.7;_grip=_gazeX=_gazeY=_leftActivity=_rightActivity=_blink=0;self.needsDisplay=YES;
@@ -101,7 +159,7 @@ static double Pulse(double age,double duration) {
     double top=_catStyle==2?118:(237-119*1.025);
     return NSMakePoint(214-40*lean+2.5*_gazeX,top-2+2*_gazeY+sin(_time*1.7)*.6);
 }
-- (void)samplePointer:(NSPoint)p onScreen:(NSPoint)normalized left:(BOOL)left right:(BOOL)right at:(double)now {
+- (void)samplePointer:(NSPoint)p onScreen:(NSPoint)normalized left:(BOOL)left right:(BOOL)right headInteractive:(BOOL)headInteractive at:(double)now {
     if(_pointerKnown){
         double dx=p.x-_pointer.x,dy=p.y-_pointer.y;
         if(dx*dx+dy*dy>.000001){
@@ -111,13 +169,20 @@ static double Pulse(double age,double duration) {
     }
     _pointer=p;_pointerKnown=YES;_screenPosition=normalized;
     BOOL hit;
-    if(_catStyle==4) hit=KCOfficeHitsHead(_officeFigure,p,KCOfficePose(now,_gazeX,_gazeY,[self lean],0));
+    if(!left)_draggingHead=NO;
+    if(_catStyle==4) hit=headInteractive && !_draggingHead && [self officeHeadAt:p];
     else {
         NSPoint c=[self headPosition];double x=(p.x-c.x)/56,y=(p.y-c.y+9)/52;
         hit=x*x+y*y<1;
     }
     if(hit&&!_headHovered)_lastPet=now;_headHovered=hit;
     [self button:0 down:left at:now];[self button:1 down:right at:now];
+}
+- (KCOfficeState)officeState {
+    if(_time<_clickUntil)return KCOfficeClick;
+    if(_headHovered)return KCOfficeHover;
+    if(_leftDown || _rightDown || _time-fmax(_lastKey,_lastMove)<.8)return KCOfficeWorking;
+    return KCOfficeIdle;
 }
 - (void)strike:(NSInteger)vk label:(NSString *)label at:(double)now {
     if(!vk || !label)return;
@@ -208,9 +273,26 @@ static double Pulse(double age,double duration) {
     NSString *state=l?(r?@"both":@"left"):(r?@"right":@"normal");
     CGContextSaveGState(ctx);CGContextTranslateCTM(ctx,_offset.x,_offset.y);
     [self drawSprite:[NSString stringWithFormat:@"mouse-%ld-%@",(long)_mouseStyle,state] alpha:1];CGContextRestoreGState(ctx);
-    if(_catStyle==4) KCOfficeDraw(ctx,_officeFigure,KCOfficePose(_time,_gazeX,_gazeY,[self lean],_blink),_left,_right);
+    if(_catStyle==4)[self drawOffice:ctx];
     else [self drawCat:ctx];
     [self drawCaps:ctx];CGContextRestoreGState(ctx);
+}
+- (void)drawOffice:(CGContextRef)ctx {
+    KCOfficeState state=[self officeState];
+    NSImage *image=state==KCOfficeClick?_officeClick:(state==KCOfficeHover?_officeHover:_officeFigure);
+    if(image!=_officeFigure) {
+        // Keep the original ears hittable where this pose is narrower. The window server skips zero-alpha pixels.
+        NSRect headRect=KCOfficeBounds(_officeFigure);
+        headRect.size.height*=_headBacking.size.height/_alphaHeight;
+        [_headBacking drawInRect:headRect fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
+                        fraction:1 respectFlipped:YES hints:nil];
+    }
+    [image drawInRect:KCOfficeBounds(image) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
+             fraction:1 respectFlipped:YES hints:nil];
+    if(state==KCOfficeWorking) {
+        KCOfficeArm(ctx,CGPointMake(246,172),_right,1);
+        KCOfficeArm(ctx,CGPointMake(182,172),_left,-1);
+    }
 }
 - (void)drawCat:(CGContextRef)ctx {
     NSInteger phase=((NSInteger)floor(_time*(_catStyle<2?1.9:1.8)/(2*M_PI)*8))%8;

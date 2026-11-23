@@ -39,7 +39,7 @@ xcrun lipo "$binary" -verify_arch arm64 x86_64
 cp "$plist" "$contents/Info.plist"
 printf 'APPL????' > "$contents/PkgInfo"
 ditto --norsrc --noextattr "$root/resources" "$contents/Resources"
-cp "$root/../assets/office-colleague.png" "$contents/Resources/office-colleague.png"
+cp "$root/../assets/"office-colleague{,-hover,-click}.png "$contents/Resources/"
 codesign --force --sign - "$app"
 codesign --verify --strict --all-architectures "$app"
 

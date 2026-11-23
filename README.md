@@ -2,7 +2,7 @@
 
 **[打开体验入口](https://keyboard-cat.app.workbuddy.host/?sharecode=6OHA4TQODE&shareId=8b833b2c65444fb4953ce4940ffc3a2e)** · [下载 Windows 和 macOS 安装包](https://github.com/liangcyprus855-ship-it/keyboard-cat-desktop/releases/latest)
 
-右键桌宠，在「角色样式」里选择猫咪或「西装同事」。人物用一只手握鼠标，另一只手敲键盘。
+右键桌宠，在「角色样式」里选择猫咪或「西装同事」。西装同事待机时正面微笑，把鼠标移到她头上，她会竖起大拇指。单击头部，她会托腮约 1.5 秒。操作键鼠时，她会一手握鼠标，一手敲键盘。
 
 在同一菜单里拖动「小猫大小」或「角色大小」，即可在 1% 到 200% 之间缩放。也可以从 Windows 系统托盘或 Mac 菜单栏打开设置。
 

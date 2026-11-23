@@ -214,7 +214,7 @@ public static partial class CatArt
     {
         if (style == CatStyle.OfficeColleague)
         {
-            OfficeColleagueArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw);
+            OfficeColleagueArt.Draw(dc,OfficePose.Idle,leftPaw,rightPaw);
             return;
         }
         if (style == CatStyle.PhotoTabby)
@@ -264,7 +264,7 @@ public static partial class CatArt
         switch (style)
         {
             case CatStyle.OfficeColleague:
-                return OfficeColleagueArt.ContainsHead(pointer,time,gazeX,gazeY,leftPaw);
+                return OfficeColleagueArt.ContainsHead(pointer);
             case CatStyle.PhotoTabby:
                 return TabbyArt.ContainsHead(pointer,time,gazeX,gazeY,leftPaw);
             case CatStyle.JapaneseBobtail:
