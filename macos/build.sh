@@ -40,6 +40,14 @@ cp "$plist" "$contents/Info.plist"
 printf 'APPL????' > "$contents/PkgInfo"
 ditto --norsrc --noextattr "$root/resources" "$contents/Resources"
 cp "$root/../assets/"office-colleague{,-hover,-click}.png "$contents/Resources/"
+for person in office hairclip ribbon headband glasses; do
+    mkdir -p "$contents/Resources/characters/$person"
+    cp "$root/../assets/characters/$person/"{hover-entry,click-entry}.png "$contents/Resources/characters/$person/"
+    if [[ "$person" != office ]]; then
+        cp "$root/../assets/characters/$person/"{idle,hover,click}.png "$contents/Resources/characters/$person/"
+    fi
+done
+cp "$root/../assets/characters/styles.tsv" "$contents/Resources/characters/styles.tsv"
 codesign --force --sign - "$app"
 codesign --verify --strict --all-architectures "$app"
 

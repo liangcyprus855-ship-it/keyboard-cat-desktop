@@ -5,13 +5,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path (Split-Path $PSScriptRoot -Parent) 'toolchain.ps1')
 
 $framework = Get-KeycatFrameworkDirectory
-$assetFolder = Join-Path $PSScriptRoot '..\..\assets'
-$images = foreach ($pose in '', 'Hover', 'Click') {
-    $fileName = if ($pose) { 'office-colleague-' + $pose.ToLowerInvariant() } else { 'office-colleague' }
-    $resourceName = if ($pose) { 'OfficeColleague.' + $pose } else { 'OfficeColleague' }
-    $file = Get-Item -LiteralPath (Join-Path $assetFolder ($fileName + '.png'))
-    '/resource:' + $file.FullName + ',KeycatDesktop.' + $resourceName + '.png'
-}
+$images = @(& (Join-Path $PSScriptRoot '..\character-resources.ps1'))
 $outputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Output)
 [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($outputPath))
 $references = foreach ($name in 'PresentationCore', 'PresentationFramework', 'WindowsBase') {

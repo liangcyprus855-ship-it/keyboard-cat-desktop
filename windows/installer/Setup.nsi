@@ -7,6 +7,7 @@ ManifestDPIAware true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "Sections.nsh"
+!include "WinVer.nsh"
 
 !define APP "键盘小黑猫"
 !define APPFILE "键盘小黑猫.exe"
@@ -181,6 +182,13 @@ SectionEnd
 Function .onInit
   !insertmacro InstallerLock
   SetShellVarContext current
+  ${IfNot} ${AtLeastWin7}
+    !insertmacro QuitWithError "键盘小黑猫需要 Windows 7 Service Pack 1 或更高版本。"
+  ${EndIf}
+  ${If} ${IsWin7}
+  ${AndIfNot} ${AtLeastServicePack} 1
+    !insertmacro QuitWithError "请先将 Windows 7 更新到 Service Pack 1，然后再安装键盘小黑猫。"
+  ${EndIf}
   StrCpy $INSTDIR "${DEST}"
   ClearErrors
   ReadRegDWORD $0 HKCU "${ARP}" "DesktopShortcut"
@@ -188,8 +196,14 @@ Function .onInit
   ${AndIf} $0 == 0
     !insertmacro UnselectSection ${SEC_DESKTOP}
   ${EndIf}
+  ClearErrors
   ReadRegDWORD $0 HKLM "SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" "Release"
-  ${If} $0 < 528040
-    !insertmacro QuitWithError "此程序需要 .NET Framework 4.8 或更高版本。请先在 Windows 中安装该运行环境，然后重试。"
+  ${If} ${Errors}
+  ${OrIf} $0 < 528040
+    MessageBox MB_YESNO|MB_ICONINFORMATION|MB_DEFBUTTON2 "请先安装 Microsoft .NET Framework 4.8 运行时，再重新运行桌宠安装包。$\r$\n$\r$\nWindows 7 SP1 可选择 4.8 的脱机安装程序。现在打开微软官方下载页吗？" /SD IDNO IDNO framework_missing
+    ExecShell "open" "https://dotnet.microsoft.com/zh-cn/download/dotnet-framework/net48"
+    framework_missing:
+    SetErrorLevel 2
+    Abort
   ${EndIf}
 FunctionEnd

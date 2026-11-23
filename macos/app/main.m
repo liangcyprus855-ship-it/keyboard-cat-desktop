@@ -68,7 +68,7 @@ static NSSize PetSize(double ratio) {
     _window.collectionBehavior=NSWindowCollectionBehaviorCanJoinAllSpaces|NSWindowCollectionBehaviorFullScreenAuxiliary|
                                NSWindowCollectionBehaviorIgnoresCycle;
     _window.ignoresMouseEvents=_through;
-    _pet=[[KCPetView alloc] initWithFrame:frame];_pet.catStyle=StyleDefault(@"cat",3,4);_pet.keyboardStyle=StyleDefault(@"keyboard",1,3);
+    _pet=[[KCPetView alloc] initWithFrame:frame];_pet.catStyle=StyleDefault(@"cat",3,8);_pet.keyboardStyle=StyleDefault(@"keyboard",1,3);
     _pet.mouseStyle=StyleDefault(@"mouse",3,3);_pet.showsLabels=[defaults boolForKey:@"labels"];
     _pet.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;_window.contentView=_pet;
     _status=[NSStatusBar.systemStatusBar statusItemWithLength:NSSquareStatusItemLength];
@@ -163,7 +163,7 @@ static NSSize PetSize(double ratio) {
     NSUInteger buttons=NSEvent.pressedMouseButtons;
     if(!_menuOpen&&!NSApp.modalWindow) {
         BOOL headInteractive=NO;
-        if(_pet.catStyle==4 && !_through && NSPointInRect(p,_window.frame) && [_pet officeHeadAt:local]) {
+        if(_pet.isPerson && !_through && NSPointInRect(p,_window.frame) && [_pet officeHeadAt:local]) {
             NSInteger front=[NSWindow windowNumberAtPoint:p belowWindowWithWindowNumber:0];
             // A pose transition can briefly expose the window underneath before the new frame is displayed.
             headInteractive=front==_window.windowNumber ||
@@ -201,7 +201,7 @@ static NSSize PetSize(double ratio) {
 }
 - (void)rebuildMenu {
     [_menu removeAllItems];
-    [self styleGroup:@"角色样式" choices:@[@"经典黑猫",@"奶油橘猫",@"日本短尾三花",@"长毛虎斑",@"西装同事"] current:_pet.catStyle action:@selector(catAction:) resource:@"portrait-%ld"];
+    [self styleGroup:@"角色样式" choices:@[@"经典黑猫",@"奶油橘猫",@"日本短尾三花",@"长毛虎斑",@"西装同事",@"发卡同事",@"红结同事",@"发带同事",@"圆镜同事"] current:_pet.catStyle action:@selector(catAction:) resource:@"portrait-%ld"];
     [self styleGroup:@"键盘样式" choices:@[@"经典奶油",@"薄荷打字机",@"冰蓝电竞",@"胡桃木"] current:_pet.keyboardStyle action:@selector(keyboardAction:) resource:@"keyboard-%ld"];
     [self styleGroup:@"鼠标样式" choices:@[@"奶油滚轮",@"雾紫鹅卵石",@"冰蓝电竞",@"酒红轨迹球"] current:_pet.mouseStyle action:@selector(mouseAction:) resource:@"mouse-%ld-normal"];
     [self addSizeControl];
@@ -213,8 +213,8 @@ static NSSize PetSize(double ratio) {
     else if(!_tap&&_window.visible)[self entry:@"重新连接键盘…" action:@selector(permissionAction:) menu:_menu];
     [_menu addItem:NSMenuItem.separatorItem];
     [self entry:@"回到屏幕右下角" action:@selector(cornerAction:) menu:_menu];
-    [self entry:_window.visible?@"暂时隐藏":(_pet.catStyle==4?@"显示角色":@"显示小猫") action:@selector(toggleVisible:) menu:_menu];
-    [self entry:_pet.catStyle==4?@"退出桌宠":@"退出键盘小黑猫" action:@selector(quit:) menu:_menu];
+    [self entry:_window.visible?@"暂时隐藏":(_pet.isPerson?@"显示角色":@"显示小猫") action:@selector(toggleVisible:) menu:_menu];
+    [self entry:_pet.isPerson?@"退出桌宠":@"退出键盘小黑猫" action:@selector(quit:) menu:_menu];
 }
 - (void)menuNeedsUpdate:(NSMenu *)menu { if(menu==_menu && !_menuOpen)[self rebuildMenu]; }
 - (void)menuWillOpen:(NSMenu *)menu {
@@ -227,7 +227,7 @@ static NSSize PetSize(double ratio) {
 - (void)keyboardAction:(NSMenuItem *)item { _pet.keyboardStyle=item.tag;[NSUserDefaults.standardUserDefaults setInteger:item.tag forKey:@"keyboard"];_pet.needsDisplay=YES; }
 - (void)mouseAction:(NSMenuItem *)item { _pet.mouseStyle=item.tag;[NSUserDefaults.standardUserDefaults setInteger:item.tag forKey:@"mouse"];_pet.needsDisplay=YES; }
 - (void)addSizeControl {
-    NSMenuItem *item=[self entry:_pet.catStyle==4?@"角色大小":@"小猫大小" action:NULL menu:_menu];
+    NSMenuItem *item=[self entry:_pet.isPerson?@"角色大小":@"小猫大小" action:NULL menu:_menu];
     NSView *row=[[NSView alloc] initWithFrame:NSMakeRect(0,0,254,56)];
     NSTextField *caption=[NSTextField labelWithString:item.title];
     caption.font=[NSFont menuFontOfSize:0];

@@ -29,6 +29,7 @@ internal sealed class CatScene : FrameworkElement
     private double lastMove = -10, leftClickAt = -10, rightClickAt = -10, lastPet = -10, nextBlink = 2.7;
     private double gazeX, gazeY, blink, leftActivity, rightActivity;
     private CatStyle previousCharacter = CatStyle.Black;
+    private OfficePoseBlend poseBlend = new OfficePoseBlend();
     private double officeClickUntil = -1, lastOfficeInput = -10;
     public bool LabelsEnabled = true;
     public CatStyle Cat = CatStyle.Black;
@@ -40,6 +41,7 @@ internal sealed class CatScene : FrameworkElement
 
     public void ResetOfficeInteraction()
     {
+        poseBlend = new OfficePoseBlend();
         officeClickUntil = -1;
         lastOfficeInput = -10;
         headHovered = false;
@@ -47,7 +49,7 @@ internal sealed class CatScene : FrameworkElement
     }
     public void ClickOfficeHead(double now)
     {
-        if (Cat != CatStyle.OfficeColleague) return;
+        if (!Cat.IsPerson()) return;
         officeClickUntil = now + 1.5;
         InvalidateVisual();
     }
@@ -63,7 +65,7 @@ internal sealed class CatScene : FrameworkElement
     {
         Point target = DeskArt.KeyPoint(vk);
         lastKey = now;
-        if (Cat == CatStyle.OfficeColleague) lastOfficeInput = now;
+        if (Cat.IsPerson()) lastOfficeInput = now;
         strikes[vk] = now;
         if (!UsingMouse(now) && (target.X < 218 || (vk == 32 && rightAt > leftAt)))
         {
@@ -139,7 +141,7 @@ internal sealed class CatScene : FrameworkElement
 
     private void MarkMouseActivity(double now)
     {
-        if (Cat == CatStyle.OfficeColleague) lastOfficeInput = now;
+        if (Cat.IsPerson()) lastOfficeInput = now;
         // A key-down can arrive just before the next cursor sample.
         if (!UsingMouse(now) && leftAt > rightAt && now - leftAt < .24)
         {
@@ -150,7 +152,7 @@ internal sealed class CatScene : FrameworkElement
 
     private bool UsingMouse(double now)
     {
-        return Cat == CatStyle.OfficeColleague || leftDown || rightDown || now - lastMove < .83;
+        return Cat.IsPerson() || leftDown || rightDown || now - lastMove < .83;
     }
     private double ClickGlow(bool down, double onset)
     {
@@ -167,7 +169,12 @@ internal sealed class CatScene : FrameworkElement
         blink = Math.Max(Pulse(now - nextBlink, .23), Pulse(now - lastPet, .59));
         double typing = 1 - Smooth((now - lastKey - .95) / .48);
         double hold = leftDown || rightDown ? 1 : 1 - Smooth((now - lastMove - .55) / .28);
-        bool office = Cat == CatStyle.OfficeColleague;
+        bool office = Cat.IsPerson();
+        if (office)
+        {
+            if (previousCharacter != Cat) OfficeColleagueArt.For(Cat).PrepareTransitions();
+            poseBlend.Update(now,CurrentOfficePose());
+        }
         grip = office ? 1 : grip + Clamp(hold - grip, -dt * 10, dt * 12);
         if (hold == 0) localTravel *= Math.Exp(-dt * 8);
         // Slow sweeps follow the position on the monitor; small reversals also
@@ -244,8 +251,8 @@ internal sealed class CatScene : FrameworkElement
         dc.PushTransform(new ScaleTransform(ActualWidth / CanvasWidth, ActualHeight / CanvasHeight));
         DeskArt.DrawDesk(dc, highlights, ClickGlow(leftDown, leftClickAt), ClickGlow(rightDown, rightClickAt),
             Keyboard, Mouse, mouseOffset);
-        if (Cat == CatStyle.OfficeColleague)
-            OfficeColleagueArt.Draw(dc, CurrentOfficePose(), left, right, PresentationSource.FromVisual(this) != null);
+        if (Cat.IsPerson())
+            OfficeColleagueArt.For(Cat).Draw(dc,poseBlend.Weights,left,right,PresentationSource.FromVisual(this)!=null);
         else
             CatArt.DrawStyled(dc, Cat, time, gazeX, gazeY, blink, left, right, leftActivity, rightActivity);
         for (int i = 0; i < caps.Count; i++)

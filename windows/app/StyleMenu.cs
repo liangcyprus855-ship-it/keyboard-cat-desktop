@@ -19,6 +19,10 @@ internal sealed class StyleMenu : IDisposable
         Add(parent, "日本短尾三花", CatStyle.JapaneseBobtail, selected, choose);
         Add(parent, "长毛虎斑", CatStyle.PhotoTabby, selected, choose);
         Add(parent, "西装同事", CatStyle.OfficeColleague, selected, choose);
+        Add(parent, "发卡同事", CatStyle.Hairclip, selected, choose);
+        Add(parent, "红结同事", CatStyle.Ribbon, selected, choose);
+        Add(parent, "发带同事", CatStyle.Headband, selected, choose);
+        Add(parent, "圆镜同事", CatStyle.Glasses, selected, choose);
         return parent;
     }
 

@@ -15,7 +15,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("键盘小黑猫")]
 [assembly: AssemblyDescription("会跟着键盘和鼠标一起动的小黑猫桌宠")]
-[assembly: AssemblyVersion("1.8.0.0")]
+[assembly: AssemblyVersion("1.9.0.0")]
 internal static class Program
 {
     [STAThread]
@@ -85,7 +85,7 @@ internal sealed class PetWindow : Window
         menu.Closed += delegate { menuOpen = false; };
         MouseLeftButtonDown += BeginDrag;
         MouseMove += ContinueDrag;
-        MouseLeftButtonUp += delegate { if (settings.Cat != CatStyle.OfficeColleague) EndDrag(); };
+        MouseLeftButtonUp += delegate { if (!settings.Cat.IsPerson()) EndDrag(); };
         LostMouseCapture += delegate { if (dragStart.HasValue) EndDrag(); };
         MouseRightButtonUp += delegate(object sender, MouseButtonEventArgs e)
         {
@@ -123,7 +123,7 @@ internal sealed class PetWindow : Window
 
     private IntPtr Messages(IntPtr window, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (settings.Cat == CatStyle.OfficeColleague && HandleOfficePointer(msg,wParam,lParam))
+        if (settings.Cat.IsPerson() && HandleOfficePointer(msg,wParam,lParam))
         {
             handled = true; return IntPtr.Zero;
         }
@@ -167,7 +167,7 @@ internal sealed class PetWindow : Window
                 2.0 * (screen.Y - cursorMonitor.Top) / Math.Max(1, cursorMonitor.Height - 1) - 1);
             bool leftDown = WindowsInput.GetAsyncKeyState(1) < 0;
             bool rightDown = WindowsInput.GetAsyncKeyState(2) < 0;
-            bool canHover = settings.Cat != CatStyle.OfficeColleague ||
+            bool canHover = !settings.Cat.IsPerson() ||
                 (!menuOpen && !dragging && !settings.ClickThrough && WindowsInput.WindowFromPoint(screen) == hwnd);
             cat.Pointer(new Point(p.X / settings.Scale, p.Y / settings.Scale), leftDown, rightDown, now, onMonitor, canHover);
         }
@@ -181,7 +181,7 @@ internal sealed class PetWindow : Window
     }
     private void BeginDrag(object sender, MouseButtonEventArgs e)
     {
-        if (settings.ClickThrough || settings.Cat == CatStyle.OfficeColleague) return;
+        if (settings.ClickThrough || settings.Cat.IsPerson()) return;
         dragStart = CursorInDips();
         dragOrigin = new Point(Left, Top);
         CaptureMouse(); e.Handled = true;
@@ -206,7 +206,7 @@ internal sealed class PetWindow : Window
         Point client = source.CompositionTarget.TransformFromDevice.Transform(
             new Point((short)(packed & 0xffff),(short)(packed >> 16)));
         Point screen = source.CompositionTarget.TransformFromDevice.Transform(PointToScreen(client));
-        bool head = OfficeColleagueArt.ContainsHead(new Point(75+client.X/settings.Scale,9+client.Y/settings.Scale));
+        bool head = OfficeColleagueArt.For(settings.Cat).ContainsHead(new Point(75+client.X/settings.Scale,9+client.Y/settings.Scale));
         bool rightPressed = (buttons.ToInt64() & 2) != 0;
         if (startsGesture)
         {
@@ -232,13 +232,13 @@ internal sealed class PetWindow : Window
     }
     private bool BeyondDragThreshold(Vector movement)
     {
-        if (settings.Cat != CatStyle.OfficeColleague) return movement.Length >= 4;
+        if (!settings.Cat.IsPerson()) return movement.Length >= 4;
         return Math.Abs(movement.X) >= SystemParameters.MinimumHorizontalDragDistance ||
                Math.Abs(movement.Y) >= SystemParameters.MinimumVerticalDragDistance;
     }
     private void ContinueDrag(object sender, MouseEventArgs e)
     {
-        if (settings.Cat == CatStyle.OfficeColleague || !dragStart.HasValue || e.LeftButton != MouseButtonState.Pressed) return;
+        if (settings.Cat.IsPerson() || !dragStart.HasValue || e.LeftButton != MouseButtonState.Pressed) return;
         MoveDrag(CursorInDips());
     }
     private void MoveDrag(Point screen)
@@ -252,7 +252,7 @@ internal sealed class PetWindow : Window
     {
         dragStart = null; officeHeadPressed = false;
         if (IsMouseCaptured) ReleaseMouseCapture();
-        else if (settings.Cat == CatStyle.OfficeColleague && WindowsInput.GetCapture() == hwnd)
+        else if (settings.Cat.IsPerson() && WindowsInput.GetCapture() == hwnd)
             WindowsInput.ReleaseCapture();
         if (dragging) { dragging = false; if (!InView()) DockToCorner(); Save(); }
     }
@@ -294,7 +294,7 @@ internal sealed class PetWindow : Window
     {
         var anchor = new Point(Left + Width, Top + Height);
         bool resized = false;
-        string title = settings.Cat == CatStyle.OfficeColleague ? "角色大小" : "小猫大小";
+        string title = settings.Cat.IsPerson() ? "角色大小" : "小猫大小";
         var size = new Forms.ToolStripMenuItem(title);
         var slider = new ScaleTrackBar(settings.Scale, title);
         var valueLabel = new Forms.ToolStripLabel(slider.PercentageText);
@@ -327,12 +327,12 @@ internal sealed class PetWindow : Window
     }
     private void BuildMenu(object sender, CancelEventArgs e)
     {
-        if (settings.Cat == CatStyle.OfficeColleague && dragStart.HasValue) EndDrag();
+        if (settings.Cat.IsPerson() && dragStart.HasValue) EndDrag();
         menuOpen = true;
         while (menu.Items.Count > 0) menu.Items[0].Dispose();
         menu.Items.Add(styleMenu.Characters(settings.Cat, delegate(CatStyle next)
         {
-            if (settings.Cat == CatStyle.OfficeColleague || next == CatStyle.OfficeColleague)
+            if (settings.Cat.IsPerson() || next.IsPerson())
                 cat.ResetOfficeInteraction();
             settings.Cat = cat.Cat = next;
             cat.InvalidateVisual(); Save();
@@ -360,7 +360,7 @@ internal sealed class PetWindow : Window
         }));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(Item("回到屏幕右下角", false, delegate { DockToCorner(); Reveal(); Save(); }));
-        bool office = settings.Cat == CatStyle.OfficeColleague;
+        bool office = settings.Cat.IsPerson();
         menu.Items.Add(Item(IsVisible ? "暂时隐藏" : (office ? "显示角色" : "显示小猫"), false, delegate
         {
             if (IsVisible) { timer.Stop(); Hide(); cat.ClearLabels(); } else Reveal();

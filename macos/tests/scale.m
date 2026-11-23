@@ -45,6 +45,14 @@ static NSData *Frame(KCPetView *view) {
     [view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
     return [NSData dataWithBytes:rep.bitmapData length:rep.bytesPerRow*rep.pixelsHigh];
 }
+static double FaceOpacity(KCPetView *view) {
+    NSBitmapImageRep *rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];
+    [view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
+    // Both poses cover the center of the face. Read in the same top-left scene coordinates used by the atlas.
+    NSInteger x=lround((214.-75)*rep.pixelsWide/306.);
+    NSInteger y=lround((105.-9)*rep.pixelsHigh/298.);
+    return [rep colorAtX:x y:y].alphaComponent;
+}
 // Test only the pet's local event handlers. Never move the actual pointer or window.
 @interface PoseTestPanel : NSPanel
 @property(nonatomic) NSUInteger dragCount;
@@ -114,7 +122,7 @@ static void CheckOfficePoses(void) {
 }
 static void CheckOffice(KCPetView *view, NSMenu *menu) {
     NSMenu *roles=[menu itemWithTitle:@"角色样式"].submenu;
-    Check(roles.numberOfItems==5,@"five role choices");
+    Check(roles.numberOfItems==9,@"nine role choices");
     NSMenuItem *office=[roles itemWithTitle:@"西装同事"];
     Check(office.tag==4 && office.image && office.target,@"office portrait and action");
     NSData *previous=Frame(view);
@@ -145,6 +153,43 @@ static void CheckOffice(KCPetView *view, NSMenu *menu) {
     Check(![Frame(view) isEqual:mouseFrame],@"simultaneous input changes the rendered frame");
     Check(view.keyboardStyle==keyboard && view.mouseStyle==mouse,@"peripheral preferences preserved");
 }
+static void CheckPeople(KCPetView *view,NSMenu *menu) {
+    NSMenu *roles=[menu itemWithTitle:@"角色样式"].submenu;
+    NSArray *names=@[@"西装同事",@"发卡同事",@"红结同事",@"发带同事",@"圆镜同事"];
+    NSPoint face=NSMakePoint(214,105);
+    for(NSInteger i=0;i<(NSInteger)names.count;i++) {
+        NSMenuItem *item=[roles itemWithTitle:names[i]];
+        Check(item && item.image && item.tag==4+i,@"human portrait present in menu");
+        [roles performActionForItemAtIndex:item.tag];
+        [view clearInput];
+        Check(view.catStyle==item.tag && view.isPerson && view.hasArt,@"human loads all poses");
+        Check([view officeHeadAt:face] && ![view officeHeadAt:NSMakePoint(214,232)],@"head and torso hit discrimination");
+        double t=NSProcessInfo.processInfo.systemUptime;
+        NSData *idle=Frame(view);
+        Pointer(view,face,YES,t);
+        [view advance:t+.1];
+        Near([view weightForOfficeState:KCOfficeIdle],.5,.00001,@"midpoint old pose");
+        Near([view weightForOfficeState:KCOfficeHover],.5,.00001,@"midpoint new pose");
+        NSData *half=Frame(view);
+        Check(FaceOpacity(view)>.94,@"an opaque face remains opaque halfway through the fade");
+        [view mouseDown:LocalMouse(view,NSEventTypeLeftMouseDown,face,t+.1)];
+        [view mouseUp:LocalMouse(view,NSEventTypeLeftMouseUp,face,t+.1)];
+        [view advance:t+.1];
+        Near([view weightForOfficeState:KCOfficeHover],.5,.00001,@"interruption retains visible pose");
+        [view advance:t+.2];
+        Near([view weightForOfficeState:KCOfficeIdle],.25,.00001,@"interrupted idle weight");
+        Near([view weightForOfficeState:KCOfficeHover],.25,.00001,@"interrupted hover weight");
+        Near([view weightForOfficeState:KCOfficeClick],.5,.00001,@"interrupted click weight");
+        [view advance:t+.32];
+        Near([view weightForOfficeState:KCOfficeClick],1,0,@"click settles");
+        Check(![half isEqual:idle] && ![half isEqual:Frame(view)],@"distinct rendered intermediate pose");
+        Pointer(view,NSMakePoint(305,260),NO,t+1.61);
+        [view advance:t+1.85];
+        Near([view weightForOfficeState:KCOfficeWorking],1,0,@"movement restores arms");
+        [view advance:t+2.45];[view advance:t+2.67];
+        Near([view weightForOfficeState:KCOfficeIdle],1,0,@"work returns to idle");
+    }
+}
 int main(int argc,const char *argv[]) {
     @autoreleasepool {
         Check(argc==2,@"test scenario required");
@@ -154,9 +199,10 @@ int main(int argc,const char *argv[]) {
         NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;
         [defaults setBool:YES forKey:@"explainedInput"];
         NSDictionary *fixtures=@{@"fresh":NSNull.null, @"legacy":@1.65, @"low":@.001, @"high":@7,
-                                 @"invalid":@"wrong type", @"nan":@(NAN), @"office":@1};
+                                 @"invalid":@"wrong type", @"nan":@(NAN), @"office":@1, @"people":@1};
         NSDictionary *expected=@{@"fresh":@100, @"legacy":@165, @"low":@1, @"high":@200,
-                                 @"invalid":@100, @"nan":@100, @"restored":@72.5, @"office":@100, @"office-restored":@100};
+                                 @"invalid":@100, @"nan":@100, @"restored":@72.5, @"office":@100, @"office-restored":@100,
+                                 @"people":@100, @"people-restored":@100};
         Check(expected[scenario]!=nil,@"unknown test scenario");
         if (fixtures[scenario]) [defaults removeObjectForKey:@"origin"];
         if (fixtures[scenario]==NSNull.null) [defaults removeObjectForKey:@"size"];
@@ -184,6 +230,12 @@ int main(int argc,const char *argv[]) {
             Check([menu itemWithTitle:@"角色大小"]!=nil,@"office size menu label");
             Check([[menu itemWithTitle:@"角色样式"].submenu itemWithTitle:@"西装同事"].state==NSControlStateValueOn,
                   @"restored character menu checkmark");
+        }
+        if ([scenario isEqual:@"people"]) CheckPeople((KCPetView *)window.contentView,menu);
+        if ([scenario isEqual:@"people-restored"]) {
+            Check(((KCPetView *)window.contentView).catStyle==8,@"last new human restored");
+            Check([[menu itemWithTitle:@"角色样式"].submenu itemWithTitle:@"圆镜同事"].state==NSControlStateValueOn,
+                  @"restored human has the menu checkmark");
         }
 
         if ([scenario isEqual:@"legacy"]) {

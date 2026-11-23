@@ -23,20 +23,13 @@ $sources = @('DeskStyle', 'DeskArt', 'MouseArt', 'CatArt', 'GingerArt', 'Bobtail
     (Get-Item -LiteralPath (Join-Path $source ($_ + '.cs'))).FullName
 }
 $exportSource = (Get-Item -LiteralPath (Join-Path $PSScriptRoot 'ExportArt.cs')).FullName
-$character = (Get-Item -LiteralPath (Join-Path $PSScriptRoot '../assets/office-colleague.png')).FullName
-$hover = (Get-Item -LiteralPath (Join-Path $PSScriptRoot '../assets/office-colleague-hover.png')).FullName
-$click = (Get-Item -LiteralPath (Join-Path $PSScriptRoot '../assets/office-colleague-click.png')).FullName
 
 $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $work = Join-Path $tempParent ('keycat-art-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work -ErrorAction Stop | Out-Null
 try {
     $compilerOutput = Join-Path $work 'ExportArt.exe'
-    $characterResources = @(
-        '/resource:' + $character + ',KeycatDesktop.OfficeColleague.png'
-        '/resource:' + $hover + ',KeycatDesktop.OfficeColleague.Hover.png'
-        '/resource:' + $click + ',KeycatDesktop.OfficeColleague.Click.png'
-    )
+    $characterResources = @(& (Join-Path $PSScriptRoot '../windows/character-resources.ps1'))
     & $compiler /nologo /optimize+ /codepage:65001 /reference:System.Xaml.dll /reference:System.Web.Extensions.dll ('/out:' + $compilerOutput) @characterResources @references @sources $exportSource
     if ($LASTEXITCODE -ne 0) { throw "Artwork exporter compilation failed ($LASTEXITCODE)." }
 
