@@ -1,9 +1,11 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Xml.Linq;
 
 internal sealed class Preferences
 {
+    public const int MinPercent = 1, MaxPercent = 200;
     public double X = double.NaN, Y = double.NaN, Scale = 1.0;
     public bool Labels = true, ClickThrough = false, OnTop = true;
     public CatStyle Cat = CatStyle.Black;
@@ -24,8 +26,10 @@ internal sealed class Preferences
                 XElement root = XElement.Load(FileName);
                 p.X = (double?)root.Attribute("x") ?? double.NaN;
                 p.Y = (double?)root.Attribute("y") ?? double.NaN;
-                p.Scale = (double?)root.Attribute("scale") ?? 1.0;
-                if (!Finite(p.Scale) || p.Scale < .55 || p.Scale > 1.8) p.Scale = 1.0;
+                double scale;
+                if (double.TryParse((string)root.Attribute("scale"), NumberStyles.Float,
+                                    CultureInfo.InvariantCulture, out scale) && Finite(scale))
+                    p.Scale = Math.Max(MinPercent / 100.0, Math.Min(MaxPercent / 100.0, scale));
                 p.Labels = (bool?)root.Attribute("labels") ?? true;
                 p.ClickThrough = (bool?)root.Attribute("clickThrough") ?? false;
                 p.OnTop = (bool?)root.Attribute("onTop") ?? true;

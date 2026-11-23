@@ -15,7 +15,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("键盘小黑猫")]
 [assembly: AssemblyDescription("会跟着键盘和鼠标一起动的小黑猫桌宠")]
-[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyVersion("1.6.0.0")]
 internal static class Program
 {
     [STAThread]
@@ -227,6 +227,40 @@ internal sealed class PetWindow : Window
         item.Click += delegate { action(); };
         return item;
     }
+    private Forms.ToolStripMenuItem SizeMenu()
+    {
+        var anchor = new Point(Left + Width, Top + Height);
+        bool resized = false;
+        var size = new Forms.ToolStripMenuItem("小猫大小");
+        var slider = new ScaleTrackBar(settings.Scale);
+        var valueLabel = new Forms.ToolStripLabel(slider.PercentageText);
+        size.DropDownItems.Add(valueLabel);
+        size.DropDownItems.Add(new Forms.ToolStripControlHost(slider));
+        size.DropDownOpened += delegate
+        {
+            anchor = new Point(Left + Width, Top + Height);
+            slider.Focus();
+        };
+        size.DropDown.Closing += delegate(object owner, Forms.ToolStripDropDownClosingEventArgs args)
+        {
+            if (args.CloseReason == Forms.ToolStripDropDownCloseReason.ItemClicked) args.Cancel = true;
+        };
+        slider.ValueChanged += delegate
+        {
+            valueLabel.Text = slider.PercentageText;
+            settings.Scale = slider.Value / 1000.0;
+            ApplySize();
+            Left = anchor.X - Width; Top = anchor.Y - Height;
+            resized = true;
+        };
+        size.DropDownClosed += delegate
+        {
+            if (!resized) return;
+            if (!InView()) DockToCorner();
+            Save(); resized = false;
+        };
+        return size;
+    }
     private void BuildMenu(object sender, CancelEventArgs e)
     {
         menuOpen = true;
@@ -236,20 +270,7 @@ internal sealed class PetWindow : Window
             settings.Cat = cat.Cat = next;
             cat.InvalidateVisual(); Save();
         }));
-        var size = new Forms.ToolStripMenuItem("小猫大小");
-        foreach (double scale in new double[] { .72, 1, 1.3, 1.65 })
-        {
-            double value = scale;
-            size.DropDownItems.Add(Item((value * 100).ToString("0") + "%", settings.Scale == value, delegate
-            {
-                double right = Left + Width, bottom = Top + Height;
-                settings.Scale = value; ApplySize();
-                Left = right - Width; Top = bottom - Height;
-                if (!InView()) DockToCorner();
-                Save();
-            }));
-        }
-        menu.Items.Add(size);
+        menu.Items.Add(SizeMenu());
         menu.Items.Add(styleMenu.Keyboards(settings.Keyboard, delegate(KeyboardStyle next)
         {
             settings.Keyboard = cat.Keyboard = next;

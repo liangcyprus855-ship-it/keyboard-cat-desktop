@@ -10,7 +10,9 @@ ManifestDPIAware true
 
 !define APP "键盘小黑猫"
 !define APPFILE "键盘小黑猫.exe"
-!define VERSION "1.5.0"
+!getdllversion "${PAYLOAD}" APP_VERSION_
+!getdllversion /packed "${PAYLOAD}" APP_PACKED_
+!define VERSION "${APP_VERSION_1}.${APP_VERSION_2}.${APP_VERSION_3}"
 !define UNINSTALL "卸载键盘小黑猫.exe"
 !define DEST "$LOCALAPPDATA\Programs\KeycatDesktop"
 !define MENU "$SMPROGRAMS"
@@ -23,7 +25,7 @@ Caption "${APP} ${VERSION} 安装"
 OutFile "${OUTPUT}"
 InstallDir "${DEST}"
 BrandingText "${APP} ${VERSION}"
-VIProductVersion "1.5.0.0"
+VIProductVersion "${VERSION}.${APP_VERSION_4}"
 VIAddVersionKey /LANG=2052 "ProductName" "${APP}"
 VIAddVersionKey /LANG=2052 "FileDescription" "键盘小黑猫 Windows 安装程序"
 VIAddVersionKey /LANG=2052 "FileVersion" "${VERSION}"
@@ -95,11 +97,11 @@ Section "桌面应用和开始菜单快捷方式" SEC_APP
     !insertmacro QuitWithError "安装目录里已有同名文件。请先移走该文件，然后重试。"
   ${EndIf}
   GetDLLVersion "$INSTDIR\${APPFILE}" $0 $1
-  ${If} $0 > 0x00010005
+  ${If} $0 > ${APP_PACKED_HIGH}
     !insertmacro QuitWithError "已安装版本比这个安装包更新。请使用较新的安装包。"
   ${EndIf}
-  ${If} $0 == 0x00010005
-  ${AndIf} $1 > 0
+  ${If} $0 == ${APP_PACKED_HIGH}
+  ${AndIf} $1 > ${APP_PACKED_LOW}
     !insertmacro QuitWithError "已安装版本比这个安装包更新。请使用较新的安装包。"
   ${EndIf}
   !insertmacro StopPet
