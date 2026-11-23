@@ -5,9 +5,11 @@ using System.Windows.Media;
 public static partial class CatArt
 {
     // Coffee is a Jianzhou tabby-and-white: brown tabby head, back and tail,
-    // white chest and belly, white legs and paws, 八字 blaze to the nose bridge
-    // with the tabby M showing above it, amber eyes, pink nose. Its coat
-    // markings sit on top of the same opaque rig used by the black cat.
+    // white chest and belly, white legs and paws, white ring around the
+    // mouth, tabby nose bridge and forehead with the M, amber eyes, pink
+    // nose. Its coat markings sit on top of the same opaque rig used by
+    // the black cat. The white chest/belly meets the tabby sides in a soft
+    // fur-scalloped edge, not a straight cut.
     private static class Coffee
     {
         internal static readonly Brush BodyFur = Coat(0xb98a5e,0x8a6742);
@@ -37,9 +39,6 @@ public static partial class CatArt
             "M -51,1 Q -44,-1 -38,2 Q -43,4 -50,7 Z");
         private static readonly Geometry RightCheek = Shape(
             "M 51,-8 Q 42,-8 35,-4 Q 43,-3 51,-3 Z M 51,1 Q 44,0 38,3 Q 44,5 50,7 Z");
-        private static readonly Geometry Blaze = Shape(
-            "M -5,-30 L 5,-30 C 6,-20 7,-12 9,-4 Q 12,2 16,6 L -16,6 " +
-            "Q -12,2 -9,-4 C -7,-12 -6,-20 -5,-30 Z");
         private static readonly Geometry Muzzle = Shape(
             "M -26,10 C -24,3 -17,-1 -9,.6 C -5,.9 -2,3 0,4 C 5,1 11,-1 18,1 " +
             "C 26,3 29,10 25,17 C 21,24 12,29 1,30 C -10,31 -21,28 -25,21 Q -29,16 -26,10 Z");
@@ -47,11 +46,24 @@ public static partial class CatArt
             "M -4.8,5 Q -3.7,2.9 0,3.9 Q 3.8,2.8 5.0,4.9 Q 5.2,6.4 2.2,8.8 Q .3,10.4 -.8,9.7 Q -5.3,6.9 -4.8,5 Z");
         private static readonly Geometry Smile = Shape(
             "M 0,9 L 0,12.3 C -1.5,15.8 -5.5,16 -7.8,13 M 0,12.3 C 1.9,15.4 5.6,15.7 8,12.9");
+        // White chest and belly. The side edges are a soft fur scallop:
+        // a chain of quadratic half-waves (wavelength ~25, visible peak
+        // ~4) around the same chest-to-belly envelope as before, slightly
+        // irregular so it reads as fur, not a machine ripple. Clipped to
+        // the body in DrawBodyMarkings, so the outer bulges never spill.
         private static readonly Geometry Bib = Shape(
             "M 182,102 C 189,112 205,110 214,111 C 225,110 240,111 244,102 " +
-            "C 248,126 251,150 253,174 C 255,194 258,212 259,226 " +
+            "Q 250.8,108 245.6,114 Q 238.5,120.8 247.4,127.5 " +
+            "Q 257.1,133.2 248.9,139 Q 241.5,146 250.1,153 " +
+            "Q 259.6,159.2 251.2,165.5 Q 243.7,172 252.6,178.5 " +
+            "Q 262.5,184.5 254.5,190.5 Q 247.6,197.2 256.5,204 " +
+            "Q 264.1,209.8 257.8,215.5 Q 252.8,220.8 259,226 " +
             "C 260,233 259,238 254,239 L 178,239 C 172,238 167,233 166,226 " +
-            "C 165,212 168,194 170,174 C 172,150 176,126 182,102 Z");
+            "Q 172,220.8 166.8,215.5 Q 160.2,209.8 167.7,204 " +
+            "Q 176.2,197.2 168.8,190.5 Q 160.2,184.5 169.7,178.5 " +
+            "Q 178.4,172 171.4,165.5 Q 163.2,159.2 173.1,153 " +
+            "Q 182.1,146 175.2,139 Q 167.2,133.2 177.3,127.5 " +
+            "Q 186.5,120.8 179.8,114 Q 174.9,108 182,102 Z");
         private static readonly Geometry Flanks = Shape(
             "M 155,168 C 167,166 174,170 181,176 Q 169,173 157,176 Z " +
             "M 156,180 Q 171,178 179,186 Q 169,183 156,188 Z " +
@@ -125,7 +137,6 @@ public static partial class CatArt
             dc.DrawGeometry(SoftMarking,null,LeftCheek);
             dc.DrawGeometry(SoftMarking,null,RightCheek);
             dc.PushTransform(new TranslateTransform(gx*2.9,0));
-            dc.DrawGeometry(Cream,null,Blaze);
             dc.DrawGeometry(Cream,null,Muzzle);
             dc.DrawGeometry(null,Lip,Smile);
             dc.DrawGeometry(NoseColor,null,Nose);
