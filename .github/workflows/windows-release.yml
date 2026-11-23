@@ -1,0 +1,43 @@
+name: Windows release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-release.yml'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Build the Windows installer
+        shell: pwsh
+        run: .\windows\build.ps1
+
+      - name: Create the GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $exe = (Resolve-Path windows/build/键盘小黑猫.exe).Path
+          $version = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
+          $tag = "v$($version.FileMajorPart).$($version.FileMinorPart).$($version.FileBuildPart)"
+          $installer = (Get-ChildItem windows/build -Filter '*Windows安装包.exe').FullName
+          if (-not $installer) { throw 'Installer not found in windows/build.' }
+          $existing = gh release view $tag --json tagName -q .tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists, skipping."
+            exit 0
+          }
+          gh release create $tag --title "键盘小黑猫 $tag" --notes "Windows 构建，含 键盘小黑猫.exe 与安装包。本版新增 星期三（金色眼睛）与 咖啡（简州猫）两个猫咪样式。" $exe $installer
