@@ -23,6 +23,49 @@ static CGEventRef Monitor(CGEventTapProxy proxy, CGEventType type, CGEventRef ev
     else if(event) [controller receiveType:type event:event];
     return event;
 }
+
+typedef struct {
+    CFMachPortRef port;
+    CFRunLoopSourceRef source;
+} KCEventTap;
+
+static BOOL TapIsActive(KCEventTap tap) {
+    return tap.port && CFMachPortIsValid(tap.port) && CGEventTapIsEnabled(tap.port);
+}
+
+static void DisconnectTap(KCEventTap *tap) {
+    if(tap->source) {
+        CFRunLoopRemoveSource(CFRunLoopGetMain(),tap->source,kCFRunLoopCommonModes);
+        CFRelease(tap->source);
+        tap->source=NULL;
+    }
+    if(tap->port) {
+        CFMachPortInvalidate(tap->port);
+        CFRelease(tap->port);
+        tap->port=NULL;
+    }
+}
+
+static void EnableTap(KCEventTap tap) {
+    if(tap.port && CFMachPortIsValid(tap.port) && !CGEventTapIsEnabled(tap.port))
+        CGEventTapEnable(tap.port,true);
+}
+
+static void ConnectTap(KCEventTap *tap, CGEventMask mask, KCController *controller) {
+    if(tap->port && CFMachPortIsValid(tap->port)) {
+        EnableTap(*tap);
+        return;
+    }
+    DisconnectTap(tap);
+    tap->port=CGEventTapCreate(kCGSessionEventTap,kCGHeadInsertEventTap,kCGEventTapOptionListenOnly,
+                               mask,Monitor,(__bridge void *)controller);
+    if(!tap->port)return;
+    tap->source=CFMachPortCreateRunLoopSource(kCFAllocatorDefault,tap->port,0);
+    if(!tap->source){DisconnectTap(tap);return;}
+    CFRunLoopAddSource(CFRunLoopGetMain(),tap->source,kCFRunLoopCommonModes);
+    EnableTap(*tap);
+}
+
 static double Now(void) { return NSProcessInfo.processInfo.systemUptime; }
 static NSInteger StyleDefault(NSString *key, NSInteger fallback, NSInteger maximum) {
     NSInteger value=[NSUserDefaults.standardUserDefaults integerForKey:key];
@@ -45,8 +88,7 @@ static NSSize PetSize(double ratio) {
     NSSlider *_sizeSlider;
     NSTextField *_sizeValue;
     NSTimer *_timer;
-    CFMachPortRef _tap;
-    CFRunLoopSourceRef _source;
+    KCEventTap _keyboardTap, _mouseAndModifiersTap, _mediaTap;
     double _lastConsentCheck, _scale;
     NSPoint _resizeAnchor;
     BOOL _alwaysOnTop, _through, _menuOpen, _permission;
@@ -89,11 +131,12 @@ static NSSize PetSize(double ratio) {
         NSAlert *alert=[NSAlert new];alert.messageText=@"桌宠图像资源缺失";
         alert.informativeText=@"请从安装包重新安装完整的“键盘小黑猫”应用。";[alert runModal];[NSApp terminate:nil];return;
     }
-    if(!_permission && ![defaults boolForKey:@"explainedInput"]){
-        [defaults setBool:YES forKey:@"explainedInput"];
+    NSString *build=[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleVersion"];
+    if(!_permission && ![[defaults stringForKey:@"explainedInputBuild"] isEqualToString:build]){
+        [defaults setObject:build forKey:@"explainedInputBuild"];
         dispatch_async(dispatch_get_main_queue(),^{
             NSAlert *alert=[NSAlert new];alert.messageText=@"让小猫跟着你打字";
-            alert.informativeText=@"允许“输入监控”后，小猫能在你使用其他应用时敲键盘。桌宠只使用物理按键编号驱动动画，按键名称短暂显示在本机。你可以随时在菜单栏的猫爪中关闭键帽显示。";
+            alert.informativeText=@"请在系统设置的“输入监控”中允许“键盘小黑猫”，然后重新打开桌宠。如果更新后原有开关已开启，请关闭后重新开启。桌宠使用物理键位驱动动画，按键名称短暂显示在本机。";
             [alert addButtonWithTitle:@"前往授权"];[alert addButtonWithTitle:@"稍后"];
             if([alert runModal]==NSAlertFirstButtonReturn)[self permissionAction:nil];
         });
@@ -120,22 +163,25 @@ static NSSize PetSize(double ratio) {
     if(![self windowOnScreen]){[self dockToCorner];[self saveOrigin];}
 }
 - (void)disconnectTap {
-    if(_source){CFRunLoopRemoveSource(CFRunLoopGetMain(),_source,kCFRunLoopCommonModes);CFRelease(_source);_source=NULL;}
-    if(_tap){CFMachPortInvalidate(_tap);CFRelease(_tap);_tap=NULL;}
+    DisconnectTap(&_keyboardTap);
+    DisconnectTap(&_mouseAndModifiersTap);
+    DisconnectTap(&_mediaTap);
 }
-- (void)reenableTap { if(_tap&&_permission&&_window.visible)CGEventTapEnable(_tap,true); }
+- (void)reenableTap {
+    if(!_permission || !_window.visible)return;
+    EnableTap(_keyboardTap);
+    EnableTap(_mouseAndModifiersTap);
+    EnableTap(_mediaTap);
+}
 - (void)refreshTap {
     _lastConsentCheck=Now();_permission=CGPreflightListenEventAccess();
     if(!_permission||!_window.visible){[self disconnectTap];return;}
-    if(_tap&&CFMachPortIsValid(_tap)){if(!CGEventTapIsEnabled(_tap))[self reenableTap];return;}
-    [self disconnectTap];
-    CGEventMask mask=CGEventMaskBit(kCGEventKeyDown)|CGEventMaskBit(kCGEventFlagsChanged)|CGEventMaskBit(NSEventTypeSystemDefined)|
+    // Quartz can drop individual event bits. A mouse or media port cannot confirm keyboard access.
+    ConnectTap(&_keyboardTap,CGEventMaskBit(kCGEventKeyDown),self);
+    CGEventMask buttonsAndModifiers=CGEventMaskBit(kCGEventFlagsChanged)|
         CGEventMaskBit(kCGEventLeftMouseDown)|CGEventMaskBit(kCGEventLeftMouseUp)|CGEventMaskBit(kCGEventRightMouseDown)|CGEventMaskBit(kCGEventRightMouseUp);
-    _tap=CGEventTapCreate(kCGSessionEventTap,kCGHeadInsertEventTap,kCGEventTapOptionListenOnly,mask,Monitor,(__bridge void *)self);
-    if(!_tap)return;
-    _source=CFMachPortCreateRunLoopSource(kCFAllocatorDefault,_tap,0);
-    if(!_source){[self disconnectTap];return;}
-    CFRunLoopAddSource(CFRunLoopGetMain(),_source,kCFRunLoopCommonModes);CGEventTapEnable(_tap,true);
+    ConnectTap(&_mouseAndModifiersTap,buttonsAndModifiers,self);
+    ConnectTap(&_mediaTap,CGEventMaskBit(NSEventTypeSystemDefined),self);
 }
 - (void)receiveType:(CGEventType)type event:(CGEventRef)event {
     if(!_window.visible||_menuOpen||NSApp.modalWindow)return;
@@ -143,8 +189,10 @@ static NSSize PetSize(double ratio) {
     if(type==(CGEventType)NSEventTypeSystemDefined) {
         if(_pet.keyboardStyle==4) {
             NSEvent *system=[NSEvent eventWithCGEvent:event];
-            NSInteger key=KCSystemArtworkKey(system.subtype,system.data1);
-            if(key)[_pet strike:key label:KCKeyLabel(key) at:t];
+            if(system.type==NSEventTypeSystemDefined) {
+                NSInteger key=KCSystemArtworkKey(system.subtype,system.data1);
+                if(key)[_pet strike:key label:KCKeyLabel(key) at:t];
+            }
         }
         return;
     }
@@ -155,7 +203,9 @@ static NSSize PetSize(double ratio) {
                 CGEventSourceKeyState(kCGEventSourceStateCombinedSessionState,code);
             if(!down)return;
         }
-        NSInteger vk=KCArtworkKey(code);[_pet strike:vk label:KCKeyLabel(vk) at:t];return;
+        NSInteger vk=KCArtworkKey(code);
+        if(vk)[_pet strike:vk label:KCKeyLabel(vk) at:t];
+        return;
     }
     if(type==kCGEventLeftMouseDown||type==kCGEventRightMouseDown||type==kCGEventLeftMouseUp||type==kCGEventRightMouseUp){
         NSInteger side=CGEventGetIntegerValueField(event,kCGMouseEventButtonNumber);
@@ -191,9 +241,9 @@ static NSSize PetSize(double ratio) {
     if(!_permission){
         NSURL *url=[NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"];
         [[NSWorkspace sharedWorkspace] openURL:url];
-    }else if(!_tap&&_window.visible){
+    }else if(_window.visible&&!TapIsActive(_keyboardTap)){
         NSAlert *alert=[NSAlert new];alert.messageText=@"请重新打开键盘小黑猫";
-        alert.informativeText=@"若系统已允许输入监控，请退出并重开应用，让授权生效。";[alert runModal];
+        alert.informativeText=@"如果重新打开后键盘仍无响应，请在系统的“输入监控”中关闭并重新开启“键盘小黑猫”，然后再打开桌宠。";[alert runModal];
     }
 }
 - (NSMenuItem *)entry:(NSString *)title action:(SEL)action menu:(NSMenu *)menu {
@@ -224,7 +274,7 @@ static NSSize PetSize(double ratio) {
     [self entry:@"保持置顶" action:@selector(topAction:) menu:_menu].state=_alwaysOnTop?NSControlStateValueOn:NSControlStateValueOff;
     [self entry:@"鼠标穿透" action:@selector(throughAction:) menu:_menu].state=_through?NSControlStateValueOn:NSControlStateValueOff;
     if(!_permission)[self entry:@"开启键盘联动…" action:@selector(permissionAction:) menu:_menu];
-    else if(!_tap&&_window.visible)[self entry:@"重新连接键盘…" action:@selector(permissionAction:) menu:_menu];
+    else if(_window.visible&&!TapIsActive(_keyboardTap))[self entry:@"重新连接键盘…" action:@selector(permissionAction:) menu:_menu];
     [_menu addItem:NSMenuItem.separatorItem];
     [self entry:@"回到屏幕右下角" action:@selector(cornerAction:) menu:_menu];
     [self entry:_window.visible?@"暂时隐藏":(_pet.isPerson?@"显示角色":@"显示小猫") action:@selector(toggleVisible:) menu:_menu];

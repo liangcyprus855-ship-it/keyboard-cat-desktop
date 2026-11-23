@@ -258,6 +258,47 @@ static void CheckApple(KCController *controller, KCPetView *view, NSMenu *menu, 
     [controller menuNeedsUpdate:menu];
     Check([menu itemWithTitle:kit].state==NSControlStateValueOn,@"paired menu checkmark");
 }
+static void SendKey(KCController *controller, CGKeyCode code, CGEventType type, CGEventFlags flags) {
+    CGEventRef event=CGEventCreateKeyboardEvent(NULL,code,true);
+    Check(event!=NULL,@"synthetic keyboard event");
+    CGEventSetType(event,type);
+    CGEventSetFlags(event,flags);
+    Check(Monitor(NULL,type,event,(__bridge void *)controller)==event,@"monitor passes the event through");
+    CFRelease(event);
+}
+
+static void CheckKeyboardEvents(KCController *controller, KCPetView *view) {
+    NSInteger originalStyle=view.keyboardStyle;
+    for(NSInteger style=0;style<5;style++) {
+        view.keyboardStyle=style;
+        [view clearInput];
+        SendKey(controller,0,kCGEventKeyDown,0);
+        NSDictionary *strikes=[view valueForKey:@"keysDown"];
+        Check(strikes[@65]!=nil,@"physical A goes through the event monitor in every style");
+        SendKey(controller,18,kCGEventKeyDown,0);
+        SendKey(controller,122,kCGEventKeyDown,0);
+        Check(strikes[@49] && strikes[@112],@"number and function-key events reach the scene");
+        NSDictionary *keys=[view valueForKey:@"keys"];
+        NSArray *xy=keys[@"112"];
+        NSPoint hand=[[view valueForKey:@"rightKey"] pointValue];
+        Near(hand.x,[xy[0] doubleValue],.000001,@"function-key hand target x");
+        Near(hand.y,[xy[1] doubleValue],.000001,@"function-key hand target y");
+        SendKey(controller,52,kCGEventKeyDown,0);
+        Check(strikes.count==3,@"unmapped hardware code does not trigger typing");
+    }
+    [view clearInput];
+    SendKey(controller,63,kCGEventFlagsChanged,0);
+    Check([[view valueForKey:@"keysDown"] count]==0,@"Fn release is ignored");
+    SendKey(controller,63,kCGEventFlagsChanged,kCGEventFlagMaskSecondaryFn);
+    SendKey(controller,72,kCGEventKeyDown,0);
+    SendKey(controller,73,kCGEventKeyDown,0);
+    SendKey(controller,74,kCGEventKeyDown,0);
+    NSDictionary *strikes=[view valueForKey:@"keysDown"];
+    Check(strikes[@256] && strikes[@123] && strikes[@122] && strikes[@121],@"Fn and direct volume/mute paths");
+    [view clearInput];
+    view.keyboardStyle=originalStyle;
+}
+
 int main(int argc,const char *argv[]) {
     @autoreleasepool {
         Check(argc==2,@"test scenario required");
@@ -265,7 +306,7 @@ int main(int argc,const char *argv[]) {
         [NSApplication.sharedApplication setActivationPolicy:NSApplicationActivationPolicyAccessory];
         Check(NSScreen.screens.count>0,@"A WindowServer session is required");
         NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;
-        [defaults setBool:YES forKey:@"explainedInput"];
+        [defaults setObject:[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleVersion"] forKey:@"explainedInputBuild"];
         NSDictionary *fixtures=@{@"fresh":NSNull.null, @"legacy":@1.65, @"low":@.001, @"high":@7,
                                  @"invalid":@"wrong type", @"nan":@(NAN), @"office":@1, @"people":@1, @"apple":@1};
         NSDictionary *expected=@{@"fresh":@100, @"legacy":@165, @"low":@1, @"high":@200,
@@ -289,6 +330,7 @@ int main(int argc,const char *argv[]) {
         const double startup=[expected[scenario] doubleValue];
         Near(slider.doubleValue,startup,.000001,@"launch scale");
         CheckWindow(window,startup);
+        if ([scenario isEqual:@"apple"]) CheckKeyboardEvents(controller,(KCPetView *)window.contentView);
         if ([scenario isEqual:@"apple"] || [scenario isEqual:@"apple-restored"])
             CheckApple(controller,(KCPetView *)window.contentView,menu,[scenario isEqual:@"apple-restored"]);
         if ([scenario isEqual:@"office"]) {
