@@ -352,7 +352,7 @@ public static partial class CatArt
         }
         if (style == CatStyle.Coffee)
         {
-            dc.DrawGeometry(Coffee.LegFur, null, limb);
+            dc.DrawGeometry(Coffee.ForelegFur, null, limb);
             Coffee.DrawSock(dc, limb, paw, paw-c, pawRadius, activity);
             return;
         }

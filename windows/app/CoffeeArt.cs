@@ -5,14 +5,15 @@ using System.Windows.Media;
 public static partial class CatArt
 {
     // Coffee is a Jianzhou tabby-and-white: brown tabby head, back and tail,
-    // white chest, muzzle blaze and paws, amber eyes, pink nose. Its coat
+    // white chest and belly, white legs and paws, 八字 blaze to the nose bridge
+    // with the tabby M showing above it, amber eyes, pink nose. Its coat
     // markings sit on top of the same opaque rig used by the black cat.
     private static class Coffee
     {
         internal static readonly Brush BodyFur = Coat(0xb98a5e,0x8a6742);
         internal static readonly Brush HeadFur = Coat(0xc08d60,0x8f6a45);
         internal static readonly Brush TailFur = Coat(0xb08254,0x84603c);
-        internal static readonly Brush LegFur = Coat(0xbd8f62,0x8a6742);
+        internal static readonly Brush ForelegFur = Coat(0xfffaf2,0xf1e6d6);
         internal static readonly Brush InnerEar = Coat(0xe89a90,0xf5bfa8);
         internal static readonly Brush Iris = Wash(new byte[]{222,164,84},new byte[]{190,128,52},new Point(.45,0),new Point(.55,1));
         internal static readonly Pen Lid = Stroke(Ink(107,74,47),2.0);
@@ -37,7 +38,8 @@ public static partial class CatArt
         private static readonly Geometry RightCheek = Shape(
             "M 51,-8 Q 42,-8 35,-4 Q 43,-3 51,-3 Z M 51,1 Q 44,0 38,3 Q 44,5 50,7 Z");
         private static readonly Geometry Blaze = Shape(
-            "M -5,-52 L 5,-52 L 4,-16 Q 7,-6 10,2 L -10,2 Q -7,-6 -4,-16 Z");
+            "M -5,-30 L 5,-30 C 6,-20 7,-12 9,-4 Q 12,2 16,6 L -16,6 " +
+            "Q -12,2 -9,-4 C -7,-12 -6,-20 -5,-30 Z");
         private static readonly Geometry Muzzle = Shape(
             "M -26,10 C -24,3 -17,-1 -9,.6 C -5,.9 -2,3 0,4 C 5,1 11,-1 18,1 " +
             "C 26,3 29,10 25,17 C 21,24 12,29 1,30 C -10,31 -21,28 -25,21 Q -29,16 -26,10 Z");
@@ -46,9 +48,10 @@ public static partial class CatArt
         private static readonly Geometry Smile = Shape(
             "M 0,9 L 0,12.3 C -1.5,15.8 -5.5,16 -7.8,13 M 0,12.3 C 1.9,15.4 5.6,15.7 8,12.9");
         private static readonly Geometry Bib = Shape(
-            "M 182,102 C 189,112 205,110 214,111 C 225,110 240,111 246,101 " +
-            "Q 248,124 236,145 L 235,138 Q 230,153 220,163 L 219,156 " +
-            "Q 216,162 210,167 Q 205,158 199,153 L 198,157 Q 183,141 181,124 Z");
+            "M 182,102 C 189,112 205,110 214,111 C 225,110 240,111 244,102 " +
+            "C 248,126 251,150 253,174 C 255,194 258,212 259,226 " +
+            "C 260,233 259,238 254,239 L 178,239 C 172,238 167,233 166,226 " +
+            "C 165,212 168,194 170,174 C 172,150 176,126 182,102 Z");
         private static readonly Geometry Flanks = Shape(
             "M 155,168 C 167,166 174,170 181,176 Q 169,173 157,176 Z " +
             "M 156,180 Q 171,178 179,186 Q 169,183 156,188 Z " +
@@ -57,8 +60,6 @@ public static partial class CatArt
         private static readonly Geometry FrontSock = Shape(
             "M -9.2,1 C -10,-4 -9.9,-9 -7.3,-10.7 Q -5,-12 -2,-10.8 Q 1,-9.3 3.2,-10.7 " +
             "Q 6.1,-12.5 8.3,-10.4 Q 10.3,-7 9.2,1 Q 7.2,8 0,9 Q -7.7,7.9 -9.2,1 Z");
-        private static readonly Geometry LegStripe = Shape(
-            "M -15,-27 C -7,-28 -3,-25 .5,-23.5 Q -6,-24 -15,-21 Z");
         private static readonly Geometry TailBand = Shape(
             "M -3,-13 Q .7,-11 4,-13 Q 1,0 4,13 Q -.2,11 -3,13 Q -4.4,0 -3,-13 Z");
 
@@ -100,10 +101,9 @@ public static partial class CatArt
         {
             if (direction.LengthSquared < .001) direction = new Vector(0,1);
             direction.Normalize();
-            // Wrist stripes turn with the final segment of the foreleg as the paw reaches.
+            // Foreleg is pure white; the sock and paw stay white with it.
             dc.PushClip(arm);
             dc.PushTransform(new MatrixTransform(direction.Y,-direction.X,direction.X,direction.Y,paw.X,paw.Y));
-            dc.DrawGeometry(SoftMarking,null,LegStripe);
             dc.DrawGeometry(Cream,null,FrontSock);
             dc.Pop();
             dc.Pop();
