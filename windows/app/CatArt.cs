@@ -226,7 +226,8 @@ public static partial class CatArt
         }
         bool ginger = style == CatStyle.Ginger;
         bool coffee = style == CatStyle.Coffee;
-        bool styled = coffee || style == CatStyle.Wednesday;
+        bool silver = style == CatStyle.SilverShaded;
+        bool styled = coffee || silver || style == CatStyle.Wednesday;
         double gx=Limit(gazeX,-1,1), gy=Limit(gazeY,-1,1);
         double lean=Smooth((157-leftPaw.X)/50);
         double breath=Math.Sin(t*1.7)*0.72;
@@ -235,9 +236,10 @@ public static partial class CatArt
         // Keep the hips planted while the chest follows the outstretched mouse paw.
         dc.PushTransform(new MatrixTransform(1,0,lean*0.282,1, -233*lean*0.282,0));
         // Forelegs overlap one solid torso at every reach, including two-key chords.
-        dc.DrawGeometry(coffee ? Coffee.BodyFur : ginger ? Ginger.BodyFur : Fur, null, Body);
+        dc.DrawGeometry(silver ? SilverShaded.BodyFur : coffee ? Coffee.BodyFur : ginger ? Ginger.BodyFur : Fur, null, Body);
         if (ginger) Ginger.DrawBodyMarkings(dc, Body);
         else if (coffee) Coffee.DrawBodyMarkings(dc, Body);
+        else if (silver) SilverShaded.DrawBodyMarkings(dc, Body);
         dc.Pop();
         if (styled)
         {
@@ -249,7 +251,6 @@ public static partial class CatArt
             Arm(dc,false,rightPaw,lean,rightActivity,ginger);
             Arm(dc,true,leftPaw,lean,leftActivity,ginger);
         }
-
         dc.PushTransform(new TranslateTransform(214 - 45*lean + gx*3.2, 86 + breath + gy*2.0 + lean*1.2));
         dc.PushTransform(new RotateTransform(gx*2.8 - lean*3.2));
         if (styled) DrawHeadStyled(dc, style, gx, gy, blink); else DrawHead(dc, ginger, gx, gy, blink);
@@ -262,7 +263,7 @@ public static partial class CatArt
     {
         if (style == CatStyle.PhotoTabby) TabbyArt.DrawPortrait(dc);
         else if (style == CatStyle.JapaneseBobtail) BobtailArt.DrawPortrait(dc);
-        else if (style == CatStyle.Coffee || style == CatStyle.Wednesday) DrawHeadStyled(dc, style, 0, 0, 0);
+        else if (style == CatStyle.Coffee || style == CatStyle.Wednesday || style == CatStyle.SilverShaded) DrawHeadStyled(dc, style, 0, 0, 0);
         else DrawHead(dc, style == CatStyle.Ginger, 0, 0, 0);
     }
 
@@ -292,7 +293,7 @@ public static partial class CatArt
         Whiskers(dc,1,gx,ginger);
     }
 
-    // Style-aware variants for Wednesday and Coffee. The original bool-based
+    // Style-aware variants for Wednesday, Coffee and SilverShaded. The original bool-based
     // Tail/Arm/Eye/Whiskers/DrawHead above are kept untouched: ExportArt.cs
     // calls Tail and DrawHead through reflection, and Black/Ginger keep the
     // exact code path they had. Wednesday reuses the black cat's geometry and
@@ -316,6 +317,11 @@ public static partial class CatArt
         {
             dc.DrawGeometry(Coffee.TailFur, null, tail);
             Coffee.DrawTailBands(dc, tail, wave, tip);
+        }
+        else if (style == CatStyle.SilverShaded)
+        {
+            dc.DrawGeometry(SilverShaded.TailFur, null, tail);
+            SilverShaded.DrawTailBands(dc, tail, wave, tip);
         }
         else dc.DrawGeometry(Fur, null, tail);
     }
@@ -356,6 +362,12 @@ public static partial class CatArt
             Coffee.DrawSock(dc, limb, paw, paw-c, pawRadius, activity);
             return;
         }
+        if (style == CatStyle.SilverShaded)
+        {
+            dc.DrawGeometry(SilverShaded.ForelegFur, null, limb);
+            SilverShaded.DrawSock(dc, limb, paw, paw-c, pawRadius, activity);
+            return;
+        }
         dc.DrawGeometry(Foreleg, null, limb);
         // End the continuous foreleg with a soft mitten shape even at oblique key reaches.
         dc.DrawEllipse(Foreleg,null,paw,pawRadius+0.35,pawRadius*(0.94-0.06*activity));
@@ -377,9 +389,10 @@ public static partial class CatArt
     {
         bool coffee = style == CatStyle.Coffee;
         bool wednesday = style == CatStyle.Wednesday;
-        Pen lid = coffee ? Coffee.Lid : wednesday ? WednesdayLid : Lid;
-        Brush irisBrush = coffee ? Coffee.Iris : wednesday ? WednesdayIris : Iris;
-        Pen edge = coffee ? Coffee.EyeEdge : null;
+        bool silver = style == CatStyle.SilverShaded;
+        Pen lid = coffee ? Coffee.Lid : wednesday ? WednesdayLid : silver ? SilverShaded.Lid : Lid;
+        Brush irisBrush = coffee ? Coffee.Iris : wednesday ? WednesdayIris : silver ? SilverShaded.Iris : Iris;
+        Pen edge = coffee ? Coffee.EyeEdge : silver ? SilverShaded.EyeEdge : null;
         double angle = side*3 + gx*4;
         double x = side*19.1 + gx*2.6;
         double y = -15.8 + gy*1.7 - side*gx*1.1;
@@ -402,6 +415,7 @@ public static partial class CatArt
             dc.DrawGeometry(irisBrush,edge,iris);
             dc.PushClip(iris);
             if (coffee) Coffee.DrawPupil(dc, x, y, gx, gy);
+            else if (silver) SilverShaded.DrawPupil(dc, x, y, gx, gy);
             else dc.DrawEllipse(Pupil,null,new Point(x+gx*7.8,y+gy*6.7),4.3+Math.Abs(gy)*0.8,8.1);
             dc.Pop();
         }
@@ -411,6 +425,9 @@ public static partial class CatArt
     private static void WhiskersStyled(DrawingContext dc, double side, double gx, CatStyle style)
     {
         bool coffee = style == CatStyle.Coffee;
+        bool silver = style == CatStyle.SilverShaded;
+        Pen whiskerPen = coffee ? Coffee.Whisker : silver ? SilverShaded.Whisker : Whisker;
+        Pen rootPen = coffee ? Coffee.WhiskerRoot : silver ? SilverShaded.WhiskerRoot : RootPen;
         double cheek = side*26 + gx*3;
         for (int k=0; k<3; ++k)
         {
@@ -422,18 +439,20 @@ public static partial class CatArt
                 g.BeginFigure(start,false,false);
                 g.QuadraticBezierTo(new Point((start.X+end.X)/2,start.Y-1.1+k*0.65),end,true,true);
             }
-            dc.DrawGeometry(null,coffee ? Coffee.Whisker : Whisker,whisker);
-            dc.DrawLine(coffee ? Coffee.WhiskerRoot : RootPen,start,new Point(start.X+side*(6.2-k*0.9),start.Y-0.45+k*0.65));
+            dc.DrawGeometry(null,whiskerPen,whisker);
+            dc.DrawLine(rootPen,start,new Point(start.X+side*(6.2-k*0.9),start.Y-0.45+k*0.65));
         }
     }
 
     private static void DrawHeadStyled(DrawingContext dc, CatStyle style, double gx, double gy, double blink)
     {
         bool coffee = style == CatStyle.Coffee;
-        dc.DrawGeometry(coffee ? Coffee.HeadFur : Face, null, Head);
-        dc.DrawGeometry(coffee ? Coffee.InnerEar : Ear, null, EarLeft);
-        dc.DrawGeometry(coffee ? Coffee.InnerEar : Ear, null, EarRight);
+        bool silver = style == CatStyle.SilverShaded;
+        dc.DrawGeometry(coffee ? Coffee.HeadFur : silver ? SilverShaded.HeadFur : Face, null, Head);
+        dc.DrawGeometry(coffee ? Coffee.InnerEar : silver ? SilverShaded.InnerEar : Ear, null, EarLeft);
+        dc.DrawGeometry(coffee ? Coffee.InnerEar : silver ? SilverShaded.InnerEar : Ear, null, EarRight);
         if (coffee) Coffee.DrawFaceMarkings(dc, Head, gx);
+        else if (silver) SilverShaded.DrawFaceMarkings(dc, Head, gx);
         EyeStyled(dc,-1,gx,gy,Limit(blink,0,1),style);
         EyeStyled(dc,1,gx,gy,Limit(blink,0,1),style);
         WhiskersStyled(dc,-1,gx,style);

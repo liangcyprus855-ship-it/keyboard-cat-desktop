@@ -20,6 +20,7 @@ internal sealed class StyleMenu : IDisposable
         Add(parent, "长毛虎斑", CatStyle.PhotoTabby, selected, choose);
         Add(parent, "星期三", CatStyle.Wednesday, selected, choose);
         Add(parent, "咖啡", CatStyle.Coffee, selected, choose);
+        Add(parent, "英短银渐层", CatStyle.SilverShaded, selected, choose);
         return parent;
     }
 
