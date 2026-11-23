@@ -27,7 +27,7 @@ static void CheckWindow(NSWindow *window, double percent) {
     Near(window.frame.size.height,298*percent/100.,1,@"window height");
 }
 static NSSlider *SizeSlider(NSMenu *menu) {
-    NSMenuItem *item=[menu itemWithTitle:@"小猫大小"];
+    NSMenuItem *item=[menu itemWithTitle:@"小猫大小"] ?: [menu itemWithTitle:@"角色大小"];
     for (NSView *child in item.view.subviews)
         if ([child isKindOfClass:NSSlider.class]) return (NSSlider *)child;
     return nil;
@@ -39,6 +39,45 @@ static void CheckIndicator(NSSlider *slider, NSString *label) {
         if ([child isKindOfClass:NSTextField.class] && [[(NSTextField *)child stringValue] isEqual:label]) return;
     Check(NO,@"visible percentage");
 }
+static NSData *Frame(KCPetView *view) {
+    NSBitmapImageRep *rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];
+    Check(rep && rep.bitmapData,@"allocated rendered frame");
+    [view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
+    return [NSData dataWithBytes:rep.bitmapData length:rep.bytesPerRow*rep.pixelsHigh];
+}
+static void CheckOffice(KCPetView *view, NSMenu *menu) {
+    NSMenu *roles=[menu itemWithTitle:@"角色样式"].submenu;
+    Check(roles.numberOfItems==5,@"five role choices");
+    NSMenuItem *office=[roles itemWithTitle:@"西装同事"];
+    Check(office.tag==4 && office.image && office.target,@"office portrait and action");
+    NSData *previous=Frame(view);
+    [roles performActionForItemAtIndex:[roles indexOfItem:office]];
+    Check(view.catStyle==4 && [NSUserDefaults.standardUserDefaults integerForKey:@"cat"]==4,@"character selection");
+    Check(![Frame(view) isEqual:previous],@"office character rendered");
+    NSInteger keyboard=view.keyboardStyle, mouse=view.mouseStyle;
+    [view clearInput];
+    Near([[view valueForKey:@"left"] pointValue].x,[[view valueForKey:@"mousePaw"] pointValue].x,.001,@"resting mouse hand");
+    Near([[view valueForKey:@"right"] pointValue].y,[[view valueForKey:@"spaceKey"] pointValue].y,.001,@"resting keyboard hand");
+    double t=NSProcessInfo.processInfo.systemUptime;
+    [view samplePointer:NSMakePoint(120,220) onScreen:NSMakePoint(-.6,.2) left:YES right:NO at:t];
+    for (int i=1;i<=12;i++) [view advance:t+i*.01];
+    NSPoint mouseHand=[[view valueForKey:@"left"] pointValue];
+    NSPoint freeHand=[[view valueForKey:@"right"] pointValue];
+    Check(mouseHand.x<135,@"anatomical right hand reaches the mouse");
+    Check([[view valueForKey:@"leftDown"] boolValue] && ![[view valueForKey:@"rightDown"] boolValue],@"left mouse button");
+    NSData *mouseFrame=Frame(view);
+    [view button:0 down:NO at:t+.125];
+    [view button:1 down:YES at:t+.125];
+    [view strike:65 label:@"A" at:t+.13];
+    for (int i=14;i<=19;i++) [view advance:t+i*.01];
+    NSPoint keyHand=[[view valueForKey:@"right"] pointValue];
+    NSPoint contact=[[view valueForKey:@"rightKey"] pointValue];
+    Check(hypot(keyHand.x-contact.x,keyHand.y-contact.y)<hypot(freeHand.x-contact.x,freeHand.y-contact.y),@"free hand strikes the key");
+    Check([[view valueForKey:@"left"] pointValue].x<135 && [[view valueForKey:@"rightDown"] boolValue] &&
+          ![[view valueForKey:@"leftDown"] boolValue],@"simultaneous right mouse and keyboard input");
+    Check(![Frame(view) isEqual:mouseFrame],@"simultaneous input changes the rendered frame");
+    Check(view.keyboardStyle==keyboard && view.mouseStyle==mouse,@"peripheral preferences preserved");
+}
 int main(int argc,const char *argv[]) {
     @autoreleasepool {
         Check(argc==2,@"test scenario required");
@@ -48,9 +87,9 @@ int main(int argc,const char *argv[]) {
         NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;
         [defaults setBool:YES forKey:@"explainedInput"];
         NSDictionary *fixtures=@{@"fresh":NSNull.null, @"legacy":@1.65, @"low":@.001, @"high":@7,
-                                 @"invalid":@"wrong type", @"nan":@(NAN)};
+                                 @"invalid":@"wrong type", @"nan":@(NAN), @"office":@1};
         NSDictionary *expected=@{@"fresh":@100, @"legacy":@165, @"low":@1, @"high":@200,
-                                 @"invalid":@100, @"nan":@100, @"restored":@72.5};
+                                 @"invalid":@100, @"nan":@100, @"restored":@72.5, @"office":@100, @"office-restored":@100};
         Check(expected[scenario]!=nil,@"unknown test scenario");
         if (fixtures[scenario]) [defaults removeObjectForKey:@"origin"];
         if (fixtures[scenario]==NSNull.null) [defaults removeObjectForKey:@"size"];
@@ -69,6 +108,13 @@ int main(int argc,const char *argv[]) {
         const double startup=[expected[scenario] doubleValue];
         Near(slider.doubleValue,startup,.000001,@"launch scale");
         CheckWindow(window,startup);
+        if ([scenario isEqual:@"office"]) CheckOffice((KCPetView *)window.contentView,menu);
+        if ([scenario isEqual:@"office-restored"]) {
+            Check(((KCPetView *)window.contentView).catStyle==4,@"office character restored after restart");
+            Check([menu itemWithTitle:@"角色大小"]!=nil,@"office size menu label");
+            Check([[menu itemWithTitle:@"角色样式"].submenu itemWithTitle:@"西装同事"].state==NSControlStateValueOn,
+                  @"restored character menu checkmark");
+        }
 
         if ([scenario isEqual:@"legacy"]) {
             NSRect initial=window.frame;

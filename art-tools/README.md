@@ -16,6 +16,7 @@ macOS 安装包使用仓库里的 `macos/resources/Art`。修改猫、键盘或�
 | --- | --- |
 | 黑猫轮廓、姿态和橘猫花纹 | `windows/app/CatArt.cs`、`windows/app/GingerArt.cs` |
 | 三花、长毛虎斑的脸形和被毛 | `windows/app/BobtailArt.cs`、`windows/app/TabbyArt.cs` |
+| 西装同事的人物底图、袖子和手部动作 | `assets/office-colleague.png`、`windows/app/OfficeColleagueArt.cs`、`macos/app/OfficeColleague.h` |
 | 键盘、键位和鼠标按键外观 | `windows/app/DeskArt.cs`、`windows/app/MouseArt.cs`、`windows/app/DeskStyle.cs` |
 | 导出图层、视线方向和动画采样 | `art-tools/ExportArt.cs` |
 | macOS 的实时前爪绘制 | `macos/app/PetArms.h` |

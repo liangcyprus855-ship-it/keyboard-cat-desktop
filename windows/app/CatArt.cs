@@ -212,6 +212,11 @@ public static partial class CatArt
     public static void DrawStyled(DrawingContext dc, CatStyle style, double t, double gazeX, double gazeY,
                                   double blink, Point leftPaw, Point rightPaw, double leftActivity, double rightActivity)
     {
+        if (style == CatStyle.OfficeColleague)
+        {
+            OfficeColleagueArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw);
+            return;
+        }
         if (style == CatStyle.PhotoTabby)
         {
             TabbyArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw,leftActivity,rightActivity);
@@ -247,7 +252,8 @@ public static partial class CatArt
     // Head-space bounds including whiskers are approximately (-57,-64) to (57,35).
     public static void DrawPortrait(DrawingContext dc, CatStyle style)
     {
-        if (style == CatStyle.PhotoTabby) TabbyArt.DrawPortrait(dc);
+        if (style == CatStyle.OfficeColleague) OfficeColleagueArt.DrawPortrait(dc);
+        else if (style == CatStyle.PhotoTabby) TabbyArt.DrawPortrait(dc);
         else if (style == CatStyle.JapaneseBobtail) BobtailArt.DrawPortrait(dc);
         else DrawHead(dc, style == CatStyle.Ginger, 0, 0, 0);
     }
@@ -257,6 +263,8 @@ public static partial class CatArt
     {
         switch (style)
         {
+            case CatStyle.OfficeColleague:
+                return OfficeColleagueArt.ContainsHead(pointer,time,gazeX,gazeY,leftPaw);
             case CatStyle.PhotoTabby:
                 return TabbyArt.ContainsHead(pointer,time,gazeX,gazeY,leftPaw);
             case CatStyle.JapaneseBobtail:

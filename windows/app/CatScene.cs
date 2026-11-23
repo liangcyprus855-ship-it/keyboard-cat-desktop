@@ -28,6 +28,7 @@ internal sealed class CatScene : FrameworkElement
     private double time, lastKey = -10, leftAt = -10, rightAt = -10;
     private double lastMove = -10, leftClickAt = -10, rightClickAt = -10, lastPet = -10, nextBlink = 2.7;
     private double gazeX, gazeY, blink, leftActivity, rightActivity;
+    private CatStyle previousCharacter = CatStyle.Black;
     public bool LabelsEnabled = true;
     public CatStyle Cat = CatStyle.Black;
     public KeyboardStyle Keyboard = KeyboardStyle.Classic;
@@ -118,7 +119,10 @@ internal sealed class CatScene : FrameworkElement
         lastMove = now;
     }
 
-    private bool UsingMouse(double now) { return leftDown || rightDown || now - lastMove < .83; }
+    private bool UsingMouse(double now)
+    {
+        return Cat == CatStyle.OfficeColleague || leftDown || rightDown || now - lastMove < .83;
+    }
     private double ClickGlow(bool down, double onset)
     {
         // A tap that starts and ends between animation frames still gets a visible press.
@@ -134,7 +138,8 @@ internal sealed class CatScene : FrameworkElement
         blink = Math.Max(Pulse(now - nextBlink, .23), Pulse(now - lastPet, .59));
         double typing = 1 - Smooth((now - lastKey - .95) / .48);
         double hold = leftDown || rightDown ? 1 : 1 - Smooth((now - lastMove - .55) / .28);
-        grip += Clamp(hold - grip, -dt * 10, dt * 12);
+        bool office = Cat == CatStyle.OfficeColleague;
+        grip = office ? 1 : grip + Clamp(hold - grip, -dt * 10, dt * 12);
         if (hold == 0) localTravel *= Math.Exp(-dt * 8);
         // Slow sweeps follow the position on the monitor; small reversals also
         // move the miniature mouse without requiring a sweep across the screen.
@@ -142,6 +147,12 @@ internal sealed class CatScene : FrameworkElement
         mouseOffset += (travel * grip - mouseOffset) * (1 - Math.Exp(-dt * 32));
         Point leftRest = Mix(IdleLeft, new Point(188, 189), typing);
         Point rightRest = Mix(IdleRight, new Point(233, 193), typing);
+        if (office)
+        {
+            rightRest = DeskArt.KeyPoint(32) - new Vector(0, 4 * typing);
+            if (previousCharacter != Cat) right = rightRest;
+        }
+        previousCharacter = Cat;
         double la = Beat(now - leftAt), ra = Beat(now - rightAt);
         leftRest = Mix(leftRest, leftKey, la);
         rightRest = Mix(rightRest, rightKey, ra);

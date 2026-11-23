@@ -11,13 +11,14 @@ internal sealed class StyleMenu : IDisposable
 {
     private readonly Dictionary<Enum, Drawing.Bitmap> images = new Dictionary<Enum, Drawing.Bitmap>();
 
-    public Forms.ToolStripMenuItem Cats(CatStyle selected, Action<CatStyle> choose)
+    public Forms.ToolStripMenuItem Characters(CatStyle selected, Action<CatStyle> choose)
     {
-        var parent = Group("猫咪样式", 29);
+        var parent = Group("角色样式", 29);
         Add(parent, "经典黑猫", CatStyle.Black, selected, choose);
         Add(parent, "奶油橘猫", CatStyle.Ginger, selected, choose);
         Add(parent, "日本短尾三花", CatStyle.JapaneseBobtail, selected, choose);
         Add(parent, "长毛虎斑", CatStyle.PhotoTabby, selected, choose);
+        Add(parent, "西装同事", CatStyle.OfficeColleague, selected, choose);
         return parent;
     }
 

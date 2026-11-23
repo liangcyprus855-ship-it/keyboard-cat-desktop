@@ -1,5 +1,6 @@
 #import "PetView.h"
 #import "PetArms.h"
+#import "OfficeColleague.h"
 #import <math.h>
 
 static double Clamp(double x,double a,double b) { return fmax(a,fmin(b,x)); }
@@ -27,10 +28,11 @@ static double Pulse(double age,double duration) {
 @implementation KCPetView {
     NSDictionary *_sprites, *_keys;
     NSURL *_assetDir;
+    NSImage *_officeFigure;
     NSMutableDictionary<NSString *,NSImage *> *_images;
     NSMutableDictionary<NSNumber *,NSNumber *> *_keysDown;
     NSMutableArray<KCCap *> *_caps;
-    NSPoint _mousePaw, _pointer, _left, _freeLeft, _right, _leftKey, _rightKey;
+    NSPoint _mousePaw, _spaceKey, _pointer, _left, _freeLeft, _right, _leftKey, _rightKey;
     NSPoint _travel, _screenPosition, _offset;
     BOOL _pointerKnown, _headHovered, _leftDown, _rightDown;
     double _time,_lastKey,_leftAt,_rightAt,_lastMove,_leftClick,_rightClick,_lastPet,_nextBlink;
@@ -40,19 +42,33 @@ static double Pulse(double age,double duration) {
 - (instancetype)initWithFrame:(NSRect)frame {
     self=[super initWithFrame:frame]; if(!self)return nil;
     _assetDir=[[[NSBundle mainBundle] resourceURL] URLByAppendingPathComponent:@"Art" isDirectory:YES];
+    NSURL *officeURL=[NSBundle.mainBundle URLForResource:@"office-colleague" withExtension:@"png"];
+    if(officeURL) _officeFigure=[[NSImage alloc] initWithContentsOfURL:officeURL];
     NSData *data=[NSData dataWithContentsOfURL:[_assetDir URLByAppendingPathComponent:@"atlas.json"]];
     NSDictionary *atlas=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:NULL]:nil;
     if([atlas isKindOfClass:NSDictionary.class]) {
         _sprites=atlas[@"sprites"];_keys=atlas[@"keys"];_mousePaw=Pair(atlas[@"mousePaw"],NSMakePoint(104,264));
+        _spaceKey=Pair(_keys[@"32"],NSMakePoint(214,260));
     }
     _images=[NSMutableDictionary dictionary];_keysDown=[NSMutableDictionary dictionary];_caps=[NSMutableArray array];
     [self clearInput];_showsLabels=YES; return self;
 }
-- (BOOL)hasArt { return _sprites[@"body-3"]!=nil && _keys.count>0; }
+- (BOOL)hasArt { return _sprites[@"body-3"] && _sprites[@"portrait-4"] && _keys.count>0 && _officeFigure.valid; }
 - (BOOL)isFlipped { return YES; }
 - (BOOL)isOpaque { return NO; }
 - (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
 - (void)mouseDown:(NSEvent *)event { [self.window performWindowDragWithEvent:event]; }
+- (void)setCatStyle:(NSInteger)style {
+    if(_catStyle==style)return;
+    _catStyle=style;
+    if(style==4)[self restOfficeHands];
+    self.needsDisplay=YES;
+}
+- (void)restOfficeHands {
+    _grip=1;
+    _left=NSMakePoint(_mousePaw.x+_offset.x,_mousePaw.y+_offset.y);
+    _right=_spaceKey;
+}
 - (void)clearInput {
     [_keysDown removeAllObjects];[_caps removeAllObjects];
     _left=_freeLeft=NSMakePoint(192,233);_right=NSMakePoint(229,233);
@@ -60,9 +76,10 @@ static double Pulse(double age,double duration) {
     _time=NSProcessInfo.processInfo.systemUptime;
     _lastMove=_lastKey=_leftAt=_rightAt=_leftClick=_rightClick=_lastPet=_time-10;
     _nextBlink=_time+2.7;_grip=_gazeX=_gazeY=_leftActivity=_rightActivity=_blink=0;self.needsDisplay=YES;
+    if(_catStyle==4)[self restOfficeHands];
 }
 - (void)setShowsLabels:(BOOL)flag { _showsLabels=flag;if(!flag)[_caps removeAllObjects];self.needsDisplay=YES; }
-- (BOOL)usingMouse:(double)now { return _leftDown || _rightDown || now-_lastMove<.83; }
+- (BOOL)usingMouse:(double)now { return _catStyle==4 || _leftDown || _rightDown || now-_lastMove<.83; }
 - (void)markMouse:(double)now {
     if(![self usingMouse:now] && _leftAt>_rightAt && now-_leftAt<.24) {
         _rightKey=_leftKey;_rightAt=_leftAt;_leftAt=now-10;
@@ -93,8 +110,13 @@ static double Pulse(double age,double duration) {
         }
     }
     _pointer=p;_pointerKnown=YES;_screenPosition=normalized;
-    NSPoint c=[self headPosition];double x=(p.x-c.x)/56,y=(p.y-c.y+9)/52;
-    BOOL hit=x*x+y*y<1;if(hit&&!_headHovered)_lastPet=now;_headHovered=hit;
+    BOOL hit;
+    if(_catStyle==4) hit=KCOfficeHitsHead(_officeFigure,p,KCOfficePose(now,_gazeX,_gazeY,[self lean],0));
+    else {
+        NSPoint c=[self headPosition];double x=(p.x-c.x)/56,y=(p.y-c.y+9)/52;
+        hit=x*x+y*y<1;
+    }
+    if(hit&&!_headHovered)_lastPet=now;_headHovered=hit;
     [self button:0 down:left at:now];[self button:1 down:right at:now];
 }
 - (void)strike:(NSInteger)vk label:(NSString *)label at:(double)now {
@@ -115,12 +137,13 @@ static double Pulse(double age,double duration) {
     _blink=fmax(Pulse(now-_nextBlink,.23),Pulse(now-_lastPet,.59));
     double typing=1-Smooth((now-_lastKey-.95)/.48);
     double hold=(_leftDown||_rightDown)?1:1-Smooth((now-_lastMove-.55)/.28);
-    _grip+=Clamp(hold-_grip,-dt*10,dt*12);
+    if(_catStyle==4)_grip=1; else _grip+=Clamp(hold-_grip,-dt*10,dt*12);
     if(hold==0)_travel=Mix(_travel,NSZeroPoint,1-exp(-dt*8));
     NSPoint target=NSMakePoint((_screenPosition.x*5+_travel.x)*_grip,(_screenPosition.y*5+_travel.y)*_grip);
     _offset=Mix(_offset,target,1-exp(-dt*32));
     NSPoint left=Mix(NSMakePoint(192,233),NSMakePoint(188,189),typing);
     NSPoint right=Mix(NSMakePoint(229,233),NSMakePoint(233,193),typing);
+    if(_catStyle==4)right=NSMakePoint(_spaceKey.x,_spaceKey.y-4*typing);
     _freeLeft=Mix(_freeLeft,Mix(left,_leftKey,Beat(now-_leftAt)),1-exp(-dt*46));
     _right=Mix(_right,Mix(right,_rightKey,Beat(now-_rightAt)),1-exp(-dt*46));
     double lg=_leftDown?1:1-Smooth((now-_leftClick-.10)/.14);
@@ -185,6 +208,11 @@ static double Pulse(double age,double duration) {
     NSString *state=l?(r?@"both":@"left"):(r?@"right":@"normal");
     CGContextSaveGState(ctx);CGContextTranslateCTM(ctx,_offset.x,_offset.y);
     [self drawSprite:[NSString stringWithFormat:@"mouse-%ld-%@",(long)_mouseStyle,state] alpha:1];CGContextRestoreGState(ctx);
+    if(_catStyle==4) KCOfficeDraw(ctx,_officeFigure,KCOfficePose(_time,_gazeX,_gazeY,[self lean],_blink),_left,_right);
+    else [self drawCat:ctx];
+    [self drawCaps:ctx];CGContextRestoreGState(ctx);
+}
+- (void)drawCat:(CGContextRef)ctx {
     NSInteger phase=((NSInteger)floor(_time*(_catStyle<2?1.9:1.8)/(2*M_PI)*8))%8;
     [self drawSprite:[NSString stringWithFormat:@"tail-%ld-%ld",(long)_catStyle,(long)phase] alpha:1];
     double lean=[self lean],shear=(_catStyle<2?.282:.285)*lean;
@@ -200,7 +228,7 @@ static double Pulse(double age,double duration) {
     NSInteger ix=(NSInteger)lround(Clamp(_gazeX,-1,1))+1, iy=(NSInteger)lround(Clamp(_gazeY,-1,1))+1;
     NSInteger blink=_blink>.80?2:(_blink>.30?1:0);
     [self drawSprite:[NSString stringWithFormat:@"head-%ld-%ld-%ld-%ld",(long)_catStyle,(long)ix,(long)iy,(long)blink] alpha:1];
-    CGContextRestoreGState(ctx);[self drawCaps:ctx];CGContextRestoreGState(ctx);
+    CGContextRestoreGState(ctx);
 }
 @end
 

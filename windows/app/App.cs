@@ -15,7 +15,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("键盘小黑猫")]
 [assembly: AssemblyDescription("会跟着键盘和鼠标一起动的小黑猫桌宠")]
-[assembly: AssemblyVersion("1.6.0.0")]
+[assembly: AssemblyVersion("1.7.0.0")]
 internal static class Program
 {
     [STAThread]
@@ -231,8 +231,9 @@ internal sealed class PetWindow : Window
     {
         var anchor = new Point(Left + Width, Top + Height);
         bool resized = false;
-        var size = new Forms.ToolStripMenuItem("小猫大小");
-        var slider = new ScaleTrackBar(settings.Scale);
+        string title = settings.Cat == CatStyle.OfficeColleague ? "角色大小" : "小猫大小";
+        var size = new Forms.ToolStripMenuItem(title);
+        var slider = new ScaleTrackBar(settings.Scale, title);
         var valueLabel = new Forms.ToolStripLabel(slider.PercentageText);
         size.DropDownItems.Add(valueLabel);
         size.DropDownItems.Add(new Forms.ToolStripControlHost(slider));
@@ -265,7 +266,7 @@ internal sealed class PetWindow : Window
     {
         menuOpen = true;
         while (menu.Items.Count > 0) menu.Items[0].Dispose();
-        menu.Items.Add(styleMenu.Cats(settings.Cat, delegate(CatStyle next)
+        menu.Items.Add(styleMenu.Characters(settings.Cat, delegate(CatStyle next)
         {
             settings.Cat = cat.Cat = next;
             cat.InvalidateVisual(); Save();
@@ -293,11 +294,12 @@ internal sealed class PetWindow : Window
         }));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(Item("回到屏幕右下角", false, delegate { DockToCorner(); Reveal(); Save(); }));
-        menu.Items.Add(Item(IsVisible ? "暂时隐藏" : "显示小猫", false, delegate
+        bool office = settings.Cat == CatStyle.OfficeColleague;
+        menu.Items.Add(Item(IsVisible ? "暂时隐藏" : (office ? "显示角色" : "显示小猫"), false, delegate
         {
             if (IsVisible) { timer.Stop(); Hide(); cat.ClearLabels(); } else Reveal();
         }));
-        menu.Items.Add(Item("退出小黑猫", false, Close));
+        menu.Items.Add(Item(office ? "退出桌宠" : "退出小黑猫", false, Close));
         e.Cancel = false;
     }
     private void CleanUp()

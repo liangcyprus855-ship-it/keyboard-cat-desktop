@@ -19,17 +19,18 @@ $references = @('WindowsBase', 'PresentationCore', 'PresentationFramework') | Fo
     $dll = Get-Item -LiteralPath (Join-Path $framework ('WPF/' + $_ + '.dll'))
     '/reference:' + $dll.FullName
 }
-$sources = @('DeskStyle', 'DeskArt', 'MouseArt', 'CatArt', 'GingerArt', 'BobtailArt', 'TabbyArt') | ForEach-Object {
+$sources = @('DeskStyle', 'DeskArt', 'MouseArt', 'CatArt', 'GingerArt', 'BobtailArt', 'TabbyArt', 'OfficeColleagueArt') | ForEach-Object {
     (Get-Item -LiteralPath (Join-Path $source ($_ + '.cs'))).FullName
 }
 $exportSource = (Get-Item -LiteralPath (Join-Path $PSScriptRoot 'ExportArt.cs')).FullName
+$character = (Get-Item -LiteralPath (Join-Path $PSScriptRoot '../assets/office-colleague.png')).FullName
 
 $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $work = Join-Path $tempParent ('keycat-art-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work -ErrorAction Stop | Out-Null
 try {
     $compilerOutput = Join-Path $work 'ExportArt.exe'
-    & $compiler /nologo /optimize+ /codepage:65001 /reference:System.Xaml.dll /reference:System.Web.Extensions.dll ('/out:' + $compilerOutput) @references @sources $exportSource
+    & $compiler /nologo /optimize+ /codepage:65001 /reference:System.Xaml.dll /reference:System.Web.Extensions.dll ('/out:' + $compilerOutput) ('/resource:' + $character + ',KeycatDesktop.OfficeColleague.png') @references @sources $exportSource
     if ($LASTEXITCODE -ne 0) { throw "Artwork exporter compilation failed ($LASTEXITCODE)." }
 
     $stage = Join-Path $work 'Art'

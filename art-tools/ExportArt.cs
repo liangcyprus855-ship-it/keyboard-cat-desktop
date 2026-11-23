@@ -91,6 +91,7 @@ internal static class ExportArt
             }
             Sprite("portrait-"+c,delegate(DrawingContext dc){CatArt.DrawPortrait(dc,(CatStyle)cat);});
         }
+        Sprite("portrait-4",delegate(DrawingContext dc){OfficeColleagueArt.DrawPortrait(dc);});
     }
 
     static void Peripherals()

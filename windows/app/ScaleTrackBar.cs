@@ -4,7 +4,7 @@ using System.Windows.Forms;
 
 internal sealed class ScaleTrackBar : TrackBar
 {
-    public ScaleTrackBar(double scale)
+    public ScaleTrackBar(double scale, string title)
     {
         Minimum = Preferences.MinPercent * 10;
         Maximum = Preferences.MaxPercent * 10;
@@ -14,7 +14,7 @@ internal sealed class ScaleTrackBar : TrackBar
         AutoSize = false;
         Size = new Size(250, 31);
         TickStyle = TickStyle.None;
-        AccessibleName = "小猫大小（百分比）";
+        AccessibleName = title + "（百分比）";
     }
 
     public string PercentageText { get { return (Value / 10.0).ToString("0.#") + "%"; } }
