@@ -35,9 +35,19 @@ jobs:
           $tag = "v$($version.FileMajorPart).$($version.FileMinorPart).$($version.FileBuildPart)"
           $installer = (Get-ChildItem windows/build -Filter '*Windows安装包.exe').FullName
           if (-not $installer) { throw 'Installer not found in windows/build.' }
+          # Replace any previous release with this tag so a re-run uploads clean assets.
           $existing = gh release view $tag --json tagName -q .tagName 2>$null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag already exists, skipping."
-            exit 0
+            Write-Host "Release $tag already exists, deleting it for a clean re-upload."
+            gh release delete $tag --yes --cleanup-tag
           }
-          gh release create $tag --title "键盘小黑猫 $tag" --notes "Windows 构建，含 键盘小黑猫.exe 与安装包。本版新增 星期三（金色眼睛）与 咖啡（简州猫）两个猫咪样式。" $exe $installer
+          gh release create $tag --title "键盘小黑猫 $tag" --notes "Windows 构建，含 键盘小黑猫.exe 与安装包。本版新增 星期三（金色眼睛）与 咖啡（简州猫）两个猫咪样式。"
+          $releaseId = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$tag" --jq .id
+          # Upload with explicit percent-encoded names: gh release create mangles
+          # non-ASCII asset names on Windows, so name the assets explicitly here.
+          foreach ($file in @($exe, $installer)) {
+            $name = [System.IO.Path]::GetFileName($file)
+            $encoded = [System.Uri]::EscapeDataString($name)
+            Write-Host "Uploading $name ..."
+            gh api --method POST -H "Content-Type: application/octet-stream" --input $file "repos/$env:GITHUB_REPOSITORY/releases/$releaseId/assets?name=$encoded"
+          }
