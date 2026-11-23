@@ -15,7 +15,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("键盘小黑猫")]
 [assembly: AssemblyDescription("会跟着键盘和鼠标一起动的小黑猫桌宠")]
-[assembly: AssemblyVersion("1.9.0.0")]
+[assembly: AssemblyVersion("1.9.1.0")]
 internal static class Program
 {
     [STAThread]
@@ -325,6 +325,14 @@ internal sealed class PetWindow : Window
         };
         return size;
     }
+    private void SelectDevices(KeyboardStyle keyboard, MouseStyle mouse)
+    {
+        settings.Keyboard = cat.Keyboard = keyboard;
+        settings.Mouse = cat.Mouse = mouse;
+        cat.InvalidateVisual();
+        Save();
+    }
+
     private void BuildMenu(object sender, CancelEventArgs e)
     {
         if (settings.Cat.IsPerson() && dragStart.HasValue) EndDrag();
@@ -338,16 +346,10 @@ internal sealed class PetWindow : Window
             cat.InvalidateVisual(); Save();
         }));
         menu.Items.Add(SizeMenu());
-        menu.Items.Add(styleMenu.Keyboards(settings.Keyboard, delegate(KeyboardStyle next)
-        {
-            settings.Keyboard = cat.Keyboard = next;
-            cat.InvalidateVisual(); Save();
-        }));
-        menu.Items.Add(styleMenu.Mice(settings.Mouse, delegate(MouseStyle next)
-        {
-            settings.Mouse = cat.Mouse = next;
-            cat.InvalidateVisual(); Save();
-        }));
+        menu.Items.Add(styleMenu.Keyboards(settings.Keyboard, next => SelectDevices(next,settings.Mouse)));
+        menu.Items.Add(styleMenu.Mice(settings.Mouse, next => SelectDevices(settings.Keyboard,next)));
+        menu.Items.Add(Item("使用苹果键鼠套装", settings.Keyboard == KeyboardStyle.Apple && settings.Mouse == MouseStyle.Apple,
+            () => SelectDevices(KeyboardStyle.Apple,MouseStyle.Apple)));
         menu.Items.Add(Item("显示浮动键帽", settings.Labels, delegate
         {
             settings.Labels = cat.LabelsEnabled = !settings.Labels;

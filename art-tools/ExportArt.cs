@@ -17,6 +17,7 @@ internal static class ExportArt
     static string output;
     static readonly Dictionary<string, object> sprites = new Dictionary<string, object>();
     static readonly Dictionary<string, object> keys = new Dictionary<string, object>();
+    static readonly Dictionary<string, double[]> appleKeys = new Dictionary<string, double[]>();
     static readonly Type Ginger = typeof(CatArt).GetNestedType("Ginger", BindingFlags.NonPublic);
 
     static T Field<T>(Type type,string name) { return (T)type.GetField(name,StaticMember).GetValue(null); }
@@ -102,8 +103,12 @@ internal static class ExportArt
         for(int vk=0;vk<256;vk++)keys.Add(vk.ToString(),Position(DeskArt.KeyPoint(vk)));
         IDictionary surfaces=Field<IDictionary>(typeof(DeskArt),"Surfaces");
         MethodInfo lookup=typeof(DeskArt).GetMethod("Lookup",StaticMember);
-        for(int i=0;i<4;i++){
-            var style=(KeyboardStyle)i;
+        // 256..261 cover Globe/Fn, regional keys, and the compact keyboard's Lock key.
+        const int lastAppleKey=261;
+        for(int vk=0;vk<=lastAppleKey;vk++)
+            appleKeys.Add(vk.ToString(),Position(DeskArt.KeyPoint(KeyboardStyle.Apple,vk)));
+        foreach(KeyboardStyle style in Enum.GetValues(typeof(KeyboardStyle))){
+            int i=(int)style;
             Sprite("keyboard-"+i,delegate(DrawingContext dc){DeskArt.DrawKeyboard(dc,style,null);});
             object surface=surfaces[style];
             var lights=(IDictionary)surface.GetType().GetField("Lights",ScalarMember).GetValue(surface);
@@ -116,15 +121,18 @@ internal static class ExportArt
                 });
             }
             // Aliases share one PNG and use the same projection as the live WPF keyboard.
-            for(int vk=0;vk<256;vk++){
+            int lastKey=style==KeyboardStyle.Apple ? lastAppleKey : 255;
+            for(int vk=0;vk<=lastKey;vk++){
                 string id="key-"+i+"-"+vk;
                 if(sprites.ContainsKey(id))continue;
-                object key=lookup.Invoke(null,new object[]{vk});
+                object key=lookup.Invoke(null,new object[]{style,vk});
                 if(key==null)continue;
                 int keyCode=(int)key.GetType().GetField("Code",ScalarMember).GetValue(key);
                 sprites.Add(id,sprites["key-"+i+"-"+keyCode]);
             }
-            var mouse=(MouseStyle)i;
+        }
+        foreach(MouseStyle mouse in Enum.GetValues(typeof(MouseStyle))){
+            int i=(int)mouse;
             foreach(string state in new[]{"normal","left","right","both"}){
                 bool l=state=="left"||state=="both",r=state=="right"||state=="both";
                 Sprite("mouse-"+i+"-"+state,delegate(DrawingContext dc){MouseArt.Draw(dc,mouse,l?1:0,r?1:0);});
@@ -136,9 +144,12 @@ internal static class ExportArt
     {
         output=Path.GetFullPath(args[0]);Directory.CreateDirectory(output);
         Cats();Peripherals();
-        var manifest=new {scale=Scale,sceneWidth=480,sceneHeight=320,mouseCenter=Position(MouseArt.Center),mousePaw=Position(MouseArt.PawTarget),sprites=sprites,keys=keys};
+        var keysByStyle=new Dictionary<string,Dictionary<string,double[]>>();
+        keysByStyle.Add(((int)KeyboardStyle.Apple).ToString(),appleKeys);
+        var manifest=new {scale=Scale,sceneWidth=480,sceneHeight=320,mouseCenter=Position(MouseArt.Center),mousePaw=Position(MouseArt.PawTarget),sprites=sprites,keys=keys,keysByStyle=keysByStyle};
         File.WriteAllText(Path.Combine(output,"atlas.json"),new JavaScriptSerializer().Serialize(manifest),new System.Text.UTF8Encoding(false));
-        Console.WriteLine("{0} sprite IDs, {1} transparent PNGs; {2} logical key locations.",sprites.Count,Directory.GetFiles(output,"*.png").Length,keys.Count);
+        Console.WriteLine("{0} sprite IDs, {1} transparent PNGs, {2} standard and {3} Apple key locations.",
+            sprites.Count,Directory.GetFiles(output,"*.png").Length,keys.Count,appleKeys.Count);
         return 0;
     }
 }

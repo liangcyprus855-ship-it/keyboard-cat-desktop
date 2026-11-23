@@ -9,9 +9,10 @@ public static class MouseArt
     private const double Angle = 11;
     public static readonly Point PawTarget = Center + new RotateTransform(Angle).Value.Transform(new Vector(-.5,-10));
 
-    private static readonly DrawingGroup[] Normal = new DrawingGroup[4];
-    private static readonly DrawingGroup[] LeftDown = new DrawingGroup[4];
-    private static readonly DrawingGroup[] RightDown = new DrawingGroup[4];
+    private static readonly int StyleCount = Enum.GetValues(typeof(MouseStyle)).Length;
+    private static readonly DrawingGroup[] Normal = new DrawingGroup[StyleCount];
+    private static readonly DrawingGroup[] LeftDown = new DrawingGroup[StyleCount];
+    private static readonly DrawingGroup[] RightDown = new DrawingGroup[StyleCount];
 
     static MouseArt()
     {
@@ -191,6 +192,44 @@ public static class MouseArt
         dc.Pop();
     }
 
+    private static readonly Geometry AppleShell = Geometry.Parse(
+        "M -.15,-20 C 6.8,-20.1 11.15,-17.15 12.05,-11.6 C 13,-6.1 12.85,3.5 11.55,11.45 " +
+        "C 10.65,17.25 8,20.05 .1,20.2 C -7.9,20.25 -10.55,17.35 -11.55,11.45 " +
+        "C -12.8,3.5 -13,-6.15 -12.05,-11.6 C -11.15,-17.2 -6.8,-20.05 -.15,-20 Z");
+
+    private static void MagicMouse(DrawingContext dc,int pressedSwitch)
+    {
+        if (pressedSwitch==0)
+        {
+            // A single, continuous white touch surface sits above the thin aluminium base.
+            dc.PushTransform(new TranslateTransform(0,1.25));
+            dc.DrawGeometry(Paint(0xB5B8BB),Line(0x9FA3A6,.55),AppleShell);
+            dc.Pop();
+            dc.DrawGeometry(Ramp(0xF3F2EE,0xEFF0F1),Line(0xCECFD0,.55),AppleShell);
+            // The small grey rear emblem faces the typist with the rest of the desk.
+            dc.PushTransform(new TranslateTransform(0,-6.6));
+            dc.PushTransform(new RotateTransform(180));
+            Brush emblem=Paint(0xD3D4D3);
+            Surface(dc,"M -.1,-1.05 C -1.15,-1.68 -2.5,-.99 -2.43,.5 C -2.38,1.55 -1.67,2.99 -.86,3.05 Q -.34,3 .02,2.75 Q .43,2.74 .79,2.97 C 1.37,3.22 2.24,2.15 2.46,1.19 C 1.41,.7 1.43,-.37 2.14,-.88 C 1.51,-1.6 .68,-1.44 -.1,-1.05 Z",emblem,null);
+            Surface(dc,"M .05,-1.54 C .04,-2.23 .52,-2.98 1.46,-3.12 C 1.48,-2.38 .91,-1.62 .05,-1.54 Z",emblem,null);
+            dc.Pop(); dc.Pop();
+            return;
+        }
+
+        dc.PushClip(AppleShell);
+        dc.PushTransform(new ScaleTransform(pressedSwitch==1 ? 1 : -1,1));
+        // The touch surface has no visible switch division. A soft pressure shadow
+        // on the corresponding front side marks a press without adding a button plate.
+        var pressure=new RadialGradientBrush();
+        pressure.GradientOrigin=pressure.Center=new Point(.53,.6);
+        pressure.RadiusX=pressure.RadiusY=.51;
+        pressure.GradientStops.Add(new GradientStop(Color.FromArgb(156,152,168,182),0));
+        pressure.GradientStops.Add(new GradientStop(Color.FromArgb(75,171,185,197),.62));
+        pressure.GradientStops.Add(new GradientStop(Color.FromArgb(0,180,191,199),1));
+        dc.DrawEllipse(pressure,null,new Point(6.6,9.1),6.6,9.9);
+        dc.Pop(); dc.Pop();
+    }
+
     private static DrawingGroup MakeMouse(MouseStyle style, int pressedSwitch)
     {
         DrawingGroup group = new DrawingGroup();
@@ -198,7 +237,8 @@ public static class MouseArt
         {
             dc.PushTransform(new TranslateTransform(Center.X, Center.Y));
             dc.PushTransform(new RotateTransform(Angle));
-            if (pressedSwitch == 0)
+            if (style == MouseStyle.Apple) MagicMouse(dc,pressedSwitch);
+            else if (pressedSwitch == 0)
             {
                 switch (style)
                 {

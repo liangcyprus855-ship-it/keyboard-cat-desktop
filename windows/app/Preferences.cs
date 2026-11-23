@@ -45,7 +45,7 @@ internal sealed class Preferences
     private static T ReadStyle<T>(XElement settings, string attribute, T fallback) where T : struct
     {
         T value;
-        return Enum.TryParse((string)settings.Attribute(attribute), out value) && Enum.IsDefined(typeof(T), value)
+        return Enum.TryParse((string)settings.Attribute(attribute), true, out value) && Enum.IsDefined(typeof(T), value)
             ? value : fallback;
     }
     public void Save()
@@ -57,7 +57,8 @@ internal sealed class Preferences
                 new XAttribute("scale", Scale), new XAttribute("labels", Labels),
                 new XAttribute("clickThrough", ClickThrough), new XAttribute("onTop", OnTop),
                 new XAttribute("catStyle", Cat),
-                new XAttribute("keyboard", Keyboard), new XAttribute("mouse", Mouse));
+                new XAttribute("keyboard", Keyboard == KeyboardStyle.Apple ? "apple" : Keyboard.ToString()),
+                new XAttribute("mouse", Mouse == MouseStyle.Apple ? "apple" : Mouse.ToString()));
             string tmp = FileName + ".tmp";
             settings.Save(tmp);
             if (File.Exists(FileName)) File.Replace(tmp, FileName, null);

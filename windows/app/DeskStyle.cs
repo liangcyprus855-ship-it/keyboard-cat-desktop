@@ -4,8 +4,8 @@ internal static class CharacterStyles
 {
     public static bool IsPerson(this CatStyle style) { return style >= CatStyle.OfficeColleague && style <= CatStyle.Glasses; }
 }
-public enum KeyboardStyle { Classic, Round, Neon, Wood }
-public enum MouseStyle { Classic, Pebble, Gaming, Trackball }
+public enum KeyboardStyle { Classic, Round, Neon, Wood, Apple }
+public enum MouseStyle { Classic, Pebble, Gaming, Trackball, Apple }
 
 internal static class DeskLayout
 {

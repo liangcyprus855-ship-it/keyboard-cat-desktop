@@ -2,6 +2,8 @@
 #define main KCApplicationMain
 #import "../app/main.m"
 #undef main
+#import <IOKit/hidsystem/IOLLEvent.h>
+#import <IOKit/hidsystem/ev_keymap.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -39,19 +41,21 @@ static void CheckIndicator(NSSlider *slider, NSString *label) {
         if ([child isKindOfClass:NSTextField.class] && [[(NSTextField *)child stringValue] isEqual:label]) return;
     Check(NO,@"visible percentage");
 }
-static NSData *Frame(KCPetView *view) {
-    NSBitmapImageRep *rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];
-    Check(rep && rep.bitmapData,@"allocated rendered frame");
-    [view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
-    return [NSData dataWithBytes:rep.bitmapData length:rep.bytesPerRow*rep.pixelsHigh];
+static NSData *FrameRect(KCPetView *view,NSRect region) {
+    NSBitmapImageRep *rep=[view bitmapImageRepForCachingDisplayInRect:region];
+    Check(rep && rep.bitmapData && !rep.isPlanar,@"allocated rendered frame");
+    [view cacheDisplayInRect:region toBitmapImageRep:rep];
+    NSUInteger rowBytes=(rep.pixelsWide*rep.bitsPerPixel+7)/8;
+    NSMutableData *data=[NSMutableData dataWithCapacity:rowBytes*rep.pixelsHigh];
+    for(NSInteger y=0;y<rep.pixelsHigh;y++)
+        [data appendBytes:rep.bitmapData+y*rep.bytesPerRow length:rowBytes];
+    return data;
 }
-static double FaceOpacity(KCPetView *view) {
-    NSBitmapImageRep *rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];
-    [view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
-    // Both poses cover the center of the face. Read in the same top-left scene coordinates used by the atlas.
-    NSInteger x=lround((214.-75)*rep.pixelsWide/306.);
-    NSInteger y=lround((105.-9)*rep.pixelsHigh/298.);
-    return [rep colorAtX:x y:y].alphaComponent;
+static NSData *Frame(KCPetView *view) { return FrameRect(view,view.bounds); }
+static NSData *HumanFrame(KCPetView *view) {
+    NSRect region=view.bounds;
+    region.size.height*=202./298.; // Includes the face and sleeves, above the independently moving desk.
+    return FrameRect(view,region);
 }
 // Test only the pet's local event handlers. Never move the actual pointer or window.
 @interface PoseTestPanel : NSPanel
@@ -165,30 +169,94 @@ static void CheckPeople(KCPetView *view,NSMenu *menu) {
         Check(view.catStyle==item.tag && view.isPerson && view.hasArt,@"human loads all poses");
         Check([view officeHeadAt:face] && ![view officeHeadAt:NSMakePoint(214,232)],@"head and torso hit discrimination");
         double t=NSProcessInfo.processInfo.systemUptime;
-        NSData *idle=Frame(view);
+        NSData *idle=HumanFrame(view);
         Pointer(view,face,YES,t);
-        [view advance:t+.1];
-        Near([view weightForOfficeState:KCOfficeIdle],.5,.00001,@"midpoint old pose");
-        Near([view weightForOfficeState:KCOfficeHover],.5,.00001,@"midpoint new pose");
-        NSData *half=Frame(view);
-        Check(FaceOpacity(view)>.94,@"an opaque face remains opaque halfway through the fade");
-        [view mouseDown:LocalMouse(view,NSEventTypeLeftMouseDown,face,t+.1)];
-        [view mouseUp:LocalMouse(view,NSEventTypeLeftMouseUp,face,t+.1)];
-        [view advance:t+.1];
-        Near([view weightForOfficeState:KCOfficeHover],.5,.00001,@"interruption retains visible pose");
-        [view advance:t+.2];
-        Near([view weightForOfficeState:KCOfficeIdle],.25,.00001,@"interrupted idle weight");
-        Near([view weightForOfficeState:KCOfficeHover],.25,.00001,@"interrupted hover weight");
-        Near([view weightForOfficeState:KCOfficeClick],.5,.00001,@"interrupted click weight");
-        [view advance:t+.32];
-        Near([view weightForOfficeState:KCOfficeClick],1,0,@"click settles");
-        Check(![half isEqual:idle] && ![half isEqual:Frame(view)],@"distinct rendered intermediate pose");
-        Pointer(view,NSMakePoint(305,260),NO,t+1.61);
-        [view advance:t+1.85];
-        Near([view weightForOfficeState:KCOfficeWorking],1,0,@"movement restores arms");
-        [view advance:t+2.45];[view advance:t+2.67];
-        Near([view weightForOfficeState:KCOfficeIdle],1,0,@"work returns to idle");
+        NSData *hover=HumanFrame(view);
+        Check(view.officeState==KCOfficeHover && ![hover isEqual:idle],@"hover is visible on its first frame");
+        [view advance:t+.20];
+        Check([hover isEqual:HumanFrame(view)],@"first hover frame equals the held final pose");
+
+        [view mouseDown:LocalMouse(view,NSEventTypeLeftMouseDown,face,t+.21)];
+        [view mouseUp:LocalMouse(view,NSEventTypeLeftMouseUp,face,t+.22)];
+        NSData *click=HumanFrame(view);
+        Check(view.officeState==KCOfficeClick && ![click isEqual:hover],@"click replaces hover immediately");
+        [view advance:t+1.71];
+        Check([click isEqual:HumanFrame(view)],@"click pose stays unchanged throughout its hold");
+        [view advance:t+1.73];
+        Check(view.officeState==KCOfficeHover && [hover isEqual:HumanFrame(view)],@"click expiry restores hover in one frame");
+
+        Pointer(view,NSMakePoint(305,260),NO,t+1.8);
+        Check(view.officeState==KCOfficeWorking && ![idle isEqual:HumanFrame(view)],@"working arms are visible on the first frame");
+        [view advance:t+2.59];
+        Check(view.officeState==KCOfficeWorking,@"working pose stays active for .8 seconds");
+        [view advance:t+2.61];
+        Check(view.officeState==KCOfficeIdle && [idle isEqual:HumanFrame(view)],@"idle has no arms on its first frame");
     }
+}
+static void Choose(NSMenu *menu,NSString *title) {
+    NSInteger index=[menu indexOfItemWithTitle:title];
+    Check(menu && index>=0, [@"menu action available: " stringByAppendingString:title]);
+    [menu performActionForItemAtIndex:index];
+}
+static void CheckApple(KCController *controller, KCPetView *view, NSMenu *menu, BOOL restored) {
+    NSMenu *keyboards=[menu itemWithTitle:@"键盘样式"].submenu, *mice=[menu itemWithTitle:@"鼠标样式"].submenu;
+    NSMenuItem *keyboard=[keyboards itemWithTitle:@"苹果妙控键盘"], *mouse=[mice itemWithTitle:@"苹果妙控鼠标"];
+    Check(keyboards.numberOfItems==5 && mice.numberOfItems==5 && keyboard.tag==4 && mouse.tag==4 &&
+        keyboard.image && mouse.image,@"five distinct keyboards and mice with Apple thumbnails");
+    NSString *kit=@"使用苹果键鼠套装";
+    NSUserDefaults *prefs=NSUserDefaults.standardUserDefaults;
+    if(restored) {
+        Check(view.keyboardStyle==4 && view.mouseStyle==4 && keyboard.state==NSControlStateValueOn &&
+            mouse.state==NSControlStateValueOn && [menu itemWithTitle:kit].state==NSControlStateValueOn,@"restored Apple gear and checkmarks");
+        [keyboards performActionForItemAtIndex:2];
+        [controller menuNeedsUpdate:menu];
+        Check(view.keyboardStyle==2 && view.mouseStyle==4 && [menu itemWithTitle:kit].state==NSControlStateValueOff,
+            @"one change after restart leaves the other device selected");
+        return;
+    }
+    NSInteger originalCat=view.catStyle;
+    Check(view.keyboardStyle==1 && view.mouseStyle==3,@"legacy gear preferences retained");
+    Choose(mice,mouse.title);
+    Check(view.keyboardStyle==1 && view.mouseStyle==4 && [prefs integerForKey:@"mouse"]==4,@"independent Apple mouse");
+    [mice performActionForItemAtIndex:3];
+    Choose(keyboards,keyboard.title);
+    Check(view.keyboardStyle==4 && view.mouseStyle==3 && [prefs integerForKey:@"keyboard"]==4,@"independent Apple keyboard");
+    [keyboards performActionForItemAtIndex:1];
+    Choose(menu,kit);
+    Check(view.keyboardStyle==4 && view.mouseStyle==4 && view.catStyle==originalCat &&
+        [prefs integerForKey:@"keyboard"]==4 && [prefs integerForKey:@"mouse"]==4,@"one click selects and saves both without changing role");
+    NSURL *atlasURL=[NSBundle.mainBundle URLForResource:@"atlas" withExtension:@"json" subdirectory:@"Art"];
+    NSDictionary *atlas=[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfURL:atlasURL] options:0 error:NULL];
+    NSDictionary *apple=atlas[@"keysByStyle"][@"4"];
+    Check(apple.count==262,@"Apple layout includes native function row and extended keys");
+    double t=NSProcessInfo.processInfo.systemUptime;
+    [view clearInput];
+    [view button:0 down:YES at:t];[view button:1 down:YES at:t];
+    const unsigned short hardware[]={122,120,99,118,96,97,98,100,101,109,103,111,53,51,50,49,0,123,124,125,126,54,55,58,61,59,63};
+    const NSInteger keys[]={112,113,114,115,116,117,118,119,120,121,122,123,27,8,192,32,65,37,39,40,38,92,91,164,165,162,256};
+    for(NSUInteger i=0;i<sizeof(hardware)/sizeof(hardware[0]);i++) {
+        NSInteger key=KCArtworkKey(hardware[i]);Check(key==keys[i],@"physical key translates to the correct keycap");
+        [view strike:key label:KCKeyLabel(key) at:t];
+        NSArray *xy=apple[@(key).stringValue];
+        Check(xy.count==2 && atlas[@"sprites"][[NSString stringWithFormat:@"key-4-%ld",(long)key]],@"matching key highlight exists");
+        NSPoint paw=[[view valueForKey:@"rightKey"] pointValue];
+        Near(paw.x,[xy[0] doubleValue],.000001,@"Apple key horizontal target");
+        Near(paw.y,[xy[1] doubleValue],.000001,@"Apple key vertical target");
+    }
+    Check([[view valueForKey:@"leftDown"] boolValue] && [[view valueForKey:@"rightDown"] boolValue],@"typing preserves both mouse buttons");
+    Check(KCArtworkKey(93)==257 && KCSystemArtworkKey(NX_SUBTYPE_POWER_KEY,0)==261 &&
+        atlas[@"sprites"][@"key-4-261"],@"JIS yen and top-right lock remain distinct");
+    Check(KCSystemArtworkKey(NX_SUBTYPE_AUX_CONTROL_BUTTONS,(NX_KEYTYPE_SOUND_UP<<16)|(NX_KEYDOWN<<8))==123 &&
+        KCSystemArtworkKey(NX_SUBTYPE_AUX_CONTROL_BUTTONS,(NX_KEYTYPE_SOUND_UP<<16)|(NX_KEYUP<<8))==0,
+        @"only the system volume press actuates the corresponding F12 position");
+    [view strike:112 label:@"F1" at:t];
+    [keyboards performActionForItemAtIndex:1];
+    NSPoint old=[[view valueForKey:@"rightKey"] pointValue];NSArray *legacy=atlas[@"keys"][@"112"];
+    Near(old.x,[legacy[0] doubleValue],.000001,@"in-flight strike restores the old keyboard geometry");
+    Check(![legacy isEqual:apple[@"112"]],@"function-key targets differ across layouts");
+    Choose(menu,kit);
+    [controller menuNeedsUpdate:menu];
+    Check([menu itemWithTitle:kit].state==NSControlStateValueOn,@"paired menu checkmark");
 }
 int main(int argc,const char *argv[]) {
     @autoreleasepool {
@@ -199,10 +267,10 @@ int main(int argc,const char *argv[]) {
         NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;
         [defaults setBool:YES forKey:@"explainedInput"];
         NSDictionary *fixtures=@{@"fresh":NSNull.null, @"legacy":@1.65, @"low":@.001, @"high":@7,
-                                 @"invalid":@"wrong type", @"nan":@(NAN), @"office":@1, @"people":@1};
+                                 @"invalid":@"wrong type", @"nan":@(NAN), @"office":@1, @"people":@1, @"apple":@1};
         NSDictionary *expected=@{@"fresh":@100, @"legacy":@165, @"low":@1, @"high":@200,
                                  @"invalid":@100, @"nan":@100, @"restored":@72.5, @"office":@100, @"office-restored":@100,
-                                 @"people":@100, @"people-restored":@100};
+                                 @"people":@100, @"people-restored":@100, @"apple":@100, @"apple-restored":@100};
         Check(expected[scenario]!=nil,@"unknown test scenario");
         if (fixtures[scenario]) [defaults removeObjectForKey:@"origin"];
         if (fixtures[scenario]==NSNull.null) [defaults removeObjectForKey:@"size"];
@@ -221,6 +289,8 @@ int main(int argc,const char *argv[]) {
         const double startup=[expected[scenario] doubleValue];
         Near(slider.doubleValue,startup,.000001,@"launch scale");
         CheckWindow(window,startup);
+        if ([scenario isEqual:@"apple"] || [scenario isEqual:@"apple-restored"])
+            CheckApple(controller,(KCPetView *)window.contentView,menu,[scenario isEqual:@"apple-restored"]);
         if ([scenario isEqual:@"office"]) {
             CheckOffice((KCPetView *)window.contentView,menu);
             CheckOfficePoses();

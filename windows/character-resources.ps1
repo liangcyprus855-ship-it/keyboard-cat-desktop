@@ -16,9 +16,4 @@ foreach ($style in (Import-Csv -LiteralPath $table.FullName -Delimiter "`t")) {
         $file = Get-Item -LiteralPath (Join-Path $assets $path)
         '/resource:' + $file.FullName + ',KeycatDesktop.' + $res + '.png'
     }
-    $directory = if ($name -eq 'OfficeColleague') { 'office' } else { $name.ToLowerInvariant() }
-    foreach ($pose in 'Hover', 'Click') {
-        $file = Get-Item -LiteralPath (Join-Path $assets ('characters\' + $directory + '\' + $pose.ToLowerInvariant() + '-entry.png'))
-        '/resource:' + $file.FullName + ',KeycatDesktop.' + $name + '.' + $pose + 'Entry.png'
-    }
 }

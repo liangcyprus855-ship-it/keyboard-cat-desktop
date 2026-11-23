@@ -13,7 +13,6 @@ typedef NS_ENUM(NSInteger, KCOfficeState) { KCOfficeIdle, KCOfficeWorking, KCOff
 - (void)cancelHeadGesture;
 - (BOOL)officeHeadAt:(NSPoint)scenePoint;
 - (KCOfficeState)officeState;
-- (double)weightForOfficeState:(KCOfficeState)state;
 - (void)button:(NSInteger)side down:(BOOL)down at:(double)now;
 - (void)strike:(NSInteger)vk label:(NSString *)label at:(double)now;
 - (void)advance:(double)now;

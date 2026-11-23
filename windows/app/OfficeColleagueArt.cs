@@ -9,26 +9,6 @@ using System.Windows.Media.Imaging;
 
 internal enum OfficePose { Idle, Working, Hover, Click }
 
-internal sealed class OfficePoseBlend
-{
-    public readonly double[] Weights = { 1, 0, 0, 0 };
-    readonly double[] from = { 1, 0, 0, 0 };
-    OfficePose target;
-    double started;
-
-    public void Update(double now, OfficePose next)
-    {
-        double t = Math.Min(1,Math.Max(0,(now-started)/.20));
-        double eased = t*t*(3-2*t);
-        for (int i=0;i<Weights.Length;i++)
-            Weights[i] = from[i]*(1-eased) + (i==(int)target ? eased : 0);
-        if (next == target) return;
-        Array.Copy(Weights,from,Weights.Length);
-        target = next;
-        started = now;
-    }
-}
-
 internal sealed class OfficeColleagueArt
 {
     const double HandScale = 1.30;
@@ -37,13 +17,12 @@ internal sealed class OfficeColleagueArt
     readonly double CenterX, Top, Height, SolidHead, BottomHead;
     readonly Point LeftShoulder, RightShoulder;
     readonly BitmapSource Figure, Portrait;
-    readonly Lazy<BitmapSource> Hover, Click, HoverEntry, ClickEntry;
+    readonly Lazy<BitmapSource> Hover, Click;
     readonly Rect Bounds;
     readonly Lazy<BitArray> HeadMask;
     readonly Lazy<DrawingGroup> HeadHitSurface;
     readonly Brush Suit, Skin, Shirt;
     readonly Pen SuitEdge, Crease, SkinEdge;
-    BitmapMixer mixer;
 
     static Dictionary<CatStyle,string[]> ReadStyles()
     {
@@ -81,8 +60,6 @@ internal sealed class OfficeColleagueArt
         Figure=LoadFigure(style==CatStyle.OfficeColleague ? "OfficeColleague" : style+".Idle");
         Hover=new Lazy<BitmapSource>(()=>LoadFigure(style+".Hover"));
         Click=new Lazy<BitmapSource>(()=>LoadFigure(style+".Click"));
-        HoverEntry=new Lazy<BitmapSource>(()=>LoadFigure(style+".HoverEntry"));
-        ClickEntry=new Lazy<BitmapSource>(()=>LoadFigure(style+".ClickEntry"));
         Bounds=ImageBounds(Figure); Portrait=CropPortrait();
         HeadMask=new Lazy<BitArray>(MakeHeadMask);
         HeadHitSurface=new Lazy<DrawingGroup>(MakeHeadHitSurface);
@@ -184,94 +161,23 @@ internal sealed class OfficeColleagueArt
         return HeadMask.Value[y*Figure.PixelWidth+x];
     }
     public void DrawIdle(DrawingContext dc) { dc.DrawImage(Figure,Bounds); }
-    public void PrepareTransitions()
+    public void Draw(DrawingContext dc, OfficePose pose, Point left, Point right, bool interactive)
     {
-        if (mixer == null) mixer = new BitmapMixer(this);
-    }
-
-    public void Draw(DrawingContext dc, double[] weights, Point left, Point right, bool interactive)
-    {
-        double work=weights[(int)OfficePose.Working], hover=weights[(int)OfficePose.Hover], click=weights[(int)OfficePose.Click];
-        // Layered HWNDs pass fully transparent pixels to whatever lies behind
-        // them. Keep the original head target present when a pose shifts its hair.
-        if (interactive && (hover>0 || click>0)) dc.DrawDrawing(HeadHitSurface.Value);
-        if (hover+click==0) DrawIdle(dc);
-        else if (hover==1) dc.DrawImage(Hover.Value,ImageBounds(Hover.Value));
-        else if (click==1) dc.DrawImage(Click.Value,ImageBounds(Click.Value));
-        else
+        if (pose == OfficePose.Hover || pose == OfficePose.Click)
         {
-            PrepareTransitions();
-            mixer.Draw(dc,hover,click);
+            // The stable head surface keeps layered-window hits on the original
+            // hairline when the current gesture changes its visible outline.
+            if (interactive) dc.DrawDrawing(HeadHitSurface.Value);
+            BitmapSource figure = pose == OfficePose.Hover ? Hover.Value : Click.Value;
+            dc.DrawImage(figure,ImageBounds(figure));
+            return;
         }
-        if (work>0)
+
+        DrawIdle(dc);
+        if (pose == OfficePose.Working)
         {
-            double restY=Top+Height*.885;
-            double lift=7*Math.Sin(Math.PI*work);
-            Point tuckedLeft = new Point(LeftShoulder.X+5,restY);
-            Point tuckedRight = new Point(RightShoulder.X-5,restY);
-            left = tuckedLeft + (left-tuckedLeft)*work - new Vector(0,lift);
-            right = tuckedRight + (right-tuckedRight)*work - new Vector(0,lift);
-            dc.PushOpacity(work);
             DrawArm(dc,RightShoulder,right,1);
             DrawArm(dc,LeftShoulder,left,-1);
-            dc.Pop();
-        }
-    }
-
-    // Work in premultiplied RGBA on a shared registered grid. Painting two
-    // half-transparent images over one another would make even an opaque face
-    // translucent halfway through the transition.
-    sealed class BitmapMixer
-    {
-        readonly Rect bounds;
-        readonly byte[] idlePixels, hoverEntryPixels, hoverPixels, clickEntryPixels, clickPixels, result;
-        readonly WriteableBitmap bitmap;
-        readonly Int32Rect area;
-        int lastHover=-1, lastClick=-1;
-
-        public BitmapMixer(OfficeColleagueArt art)
-        {
-            BitmapSource[] poses={art.Figure,art.HoverEntry.Value,art.Hover.Value,art.ClickEntry.Value,art.Click.Value};
-            Rect all=art.Bounds;
-            foreach (BitmapSource p in poses) all.Union(art.ImageBounds(p));
-            double left=Math.Floor(all.Left*2)/2, top=Math.Floor(all.Top*2)/2;
-            int w=(int)Math.Ceiling((all.Right-left)*2), h=(int)Math.Ceiling((all.Bottom-top)*2);
-            bounds=new Rect(left,top,w/2.0,h/2.0); area=new Int32Rect(0,0,w,h);
-            var layers=new byte[poses.Length][];
-            for (int i=0;i<poses.Length;i++)
-            {
-                var visual=new DrawingVisual();
-                Rect frame=art.ImageBounds(poses[i]);
-                frame.Offset(-left,-top);
-                using (DrawingContext dc=visual.RenderOpen()) dc.DrawImage(poses[i],frame);
-                var layer=new RenderTargetBitmap(w,h,192,192,PixelFormats.Pbgra32);
-                layer.Render(visual);
-                layers[i]=new byte[w*h*4];
-                layer.CopyPixels(layers[i],w*4,0);
-            }
-            idlePixels=layers[0]; hoverEntryPixels=layers[1]; hoverPixels=layers[2];
-            clickEntryPixels=layers[3]; clickPixels=layers[4]; result=new byte[w*h*4];
-            bitmap=new WriteableBitmap(w,h,192,192,PixelFormats.Pbgra32,null);
-        }
-        static int FinishWeight(int weight)
-        {
-            double u=Math.Max(0,(weight/1024.0-.45)/.55);
-            return (int)Math.Round(weight*u*u*(3-2*u));
-        }
-        public void Draw(DrawingContext dc,double hover,double click)
-        {
-            int h=(int)Math.Round(1024*hover), c=Math.Min(1024-h,(int)Math.Round(1024*click));
-            if (h!=lastHover || c!=lastClick)
-            {
-                int idle=1024-h-c, hf=FinishWeight(h), cf=FinishWeight(c);
-                int he=h-hf, ce=c-cf;
-                for (int i=0;i<result.Length;i++)
-                    result[i]=(byte)((idlePixels[i]*idle + hoverEntryPixels[i]*he + hoverPixels[i]*hf +
-                                      clickEntryPixels[i]*ce + clickPixels[i]*cf + 512)>>10);
-                bitmap.WritePixels(area,result,area.Width*4,0);
-                lastHover=h; lastClick=c;
-            }
-            dc.DrawImage(bitmap,bounds);
         }
     }
 

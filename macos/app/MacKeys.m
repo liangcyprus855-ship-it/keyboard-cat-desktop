@@ -1,4 +1,6 @@
 #import "MacKeys.h"
+#import <IOKit/hidsystem/IOLLEvent.h>
+#import <IOKit/hidsystem/ev_keymap.h>
 
 NSInteger KCArtworkKey(unsigned short code) {
     static const unsigned short map[128] = {
@@ -15,6 +17,24 @@ NSInteger KCArtworkKey(unsigned short code) {
     };
     return code<128 ? map[code] : 0;
 }
+NSInteger KCSystemArtworkKey(short subtype, NSInteger data) {
+    if(subtype==NX_SUBTYPE_POWER_KEY)return 261;
+    if(subtype!=NX_SUBTYPE_AUX_CONTROL_BUTTONS || ((data>>8)&0xff)!=NX_KEYDOWN)return 0;
+    // These are the same physical positions whether the top row sends F keys or a system-control press.
+    switch((data>>16)&0xffff) {
+        case NX_KEYTYPE_BRIGHTNESS_DOWN:return 112;
+        case NX_KEYTYPE_BRIGHTNESS_UP:return 113;
+        case NX_KEYTYPE_ILLUMINATION_DOWN:return 116;
+        case NX_KEYTYPE_ILLUMINATION_UP:return 117;
+        case NX_KEYTYPE_PREVIOUS:case NX_KEYTYPE_REWIND:return 118;
+        case NX_KEYTYPE_PLAY:return 119;
+        case NX_KEYTYPE_NEXT:case NX_KEYTYPE_FAST:return 120;
+        case NX_KEYTYPE_MUTE:return 121;
+        case NX_KEYTYPE_SOUND_DOWN:return 122;
+        case NX_KEYTYPE_SOUND_UP:return 123;
+        default:return 0;
+    }
+}
 NSString *KCKeyLabel(NSInteger vk) {
     if ((vk>=48&&vk<=57)||(vk>=65&&vk<=90)) return [NSString stringWithFormat:@"%c",(int)vk];
     if (vk>=96&&vk<=105) return [NSString stringWithFormat:@"%ld",(long)(vk-96)];
@@ -29,6 +49,7 @@ NSString *KCKeyLabel(NSInteger vk) {
         case 186:return @";"; case 187:return @"="; case 188:return @","; case 189:return @"−"; case 192:return @"`";
         case 219:return @"["; case 220:return @"\\"; case 221:return @"]"; case 222:return @"'"; case 226:return @"§";
         case 256:return @"fn"; case 257:return @"¥"; case 258:return @"ろ"; case 259:return @"英数"; case 260:return @"かな";
+        case 261:return @"锁屏";
         default:return nil;
     }
 }

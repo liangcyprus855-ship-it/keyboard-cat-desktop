@@ -5,14 +5,15 @@ using System.Windows;
 using System.Windows.Media;
 
 // The keyboard faces the cat. Column zero is the typist's left, on the viewer's right.
-public static class DeskArt
+public static partial class DeskArt
 {
     private sealed class Key
     {
         public int Code;
         public string Legend;
         public Point Center;
-        public double U, V, Units;
+        public double U, V, Units, Height = 1;
+        public string Symbol;
         public bool Accent;
     }
 
@@ -72,6 +73,7 @@ public static class DeskArt
             new string[] { "Esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "⌫" },
             new double[] { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2 });
 
+        Surfaces[KeyboardStyle.Apple] = BuildApple();
         Surfaces[KeyboardStyle.Classic] = Build(KeyboardStyle.Classic,
             new Finish(0xF6F5E8, 0xFFB71B, 0xBFBCAD, 0x6E6B60, 0xDAF575, 0x34382D));
         Surfaces[KeyboardStyle.Round] = Build(KeyboardStyle.Round,
@@ -286,19 +288,25 @@ public static class DeskArt
         dc.Pop();
     }
 
-    private static Key Lookup(int vk)
+    private static Key Lookup(KeyboardStyle style, int vk)
     {
         if (vk >= 0x60 && vk <= 0x69) vk = 48 + vk - 0x60;
         if (vk == 0x10) vk = 0xA0;
         if (vk == 0x11) vk = 0xA2;
         if (vk == 0x12) vk = 0xA4;
         Key key;
+        if (style == KeyboardStyle.Apple) return AppleKeys.TryGetValue(AppleCode(vk),out key) ? key : null;
         return KeyByCode.TryGetValue(vk, out key) ? key : null;
     }
 
     public static Point KeyPoint(int vk)
     {
-        Key key = Lookup(vk);
+        return KeyPoint(KeyboardStyle.Classic,vk);
+    }
+
+    public static Point KeyPoint(KeyboardStyle style, int vk)
+    {
+        Key key = Lookup(style,vk);
         Point target;
         if (key != null) target = key.Center;
         else if (vk >= 0x70 && vk <= 0x7B) target = Project(1.5 + vk - 0x70, 4.5);
@@ -316,7 +324,7 @@ public static class DeskArt
         {
             foreach (KeyValuePair<int, double> press in highlights)
             {
-                Key key = Lookup(press.Key);
+                Key key = Lookup(keyboard, press.Key);
                 if (key == null || press.Value <= 0) continue;
                 dc.PushOpacity(Math.Min(1, press.Value));
                 dc.DrawDrawing(surface.Lights[key.Code]);

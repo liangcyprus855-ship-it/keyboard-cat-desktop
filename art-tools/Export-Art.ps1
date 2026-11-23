@@ -19,7 +19,7 @@ $references = @('WindowsBase', 'PresentationCore', 'PresentationFramework') | Fo
     $dll = Get-Item -LiteralPath (Join-Path $framework ('WPF/' + $_ + '.dll'))
     '/reference:' + $dll.FullName
 }
-$sources = @('DeskStyle', 'DeskArt', 'MouseArt', 'CatArt', 'GingerArt', 'BobtailArt', 'TabbyArt', 'OfficeColleagueArt') | ForEach-Object {
+$sources = @('DeskStyle', 'DeskArt', 'AppleKeyboard', 'MouseArt', 'CatArt', 'GingerArt', 'BobtailArt', 'TabbyArt', 'OfficeColleagueArt') | ForEach-Object {
     (Get-Item -LiteralPath (Join-Path $source ($_ + '.cs'))).FullName
 }
 $exportSource = (Get-Item -LiteralPath (Join-Path $PSScriptRoot 'ExportArt.cs')).FullName

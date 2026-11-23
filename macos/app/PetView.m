@@ -31,22 +31,21 @@ static NSImage *OfficeImage(NSString *name,NSString *directory) {
 }
 
 @implementation KCPetView {
-    NSDictionary *_sprites, *_keys, *_personStyles;
+    NSDictionary *_sprites, *_keys, *_defaultKeys, *_keysByStyle, *_personStyles;
     KCPersonStyle _look;
     NSURL *_assetDir;
-    NSImage *_officeFigure,*_officeHover,*_officeClick,*_hoverEntry,*_clickEntry,*_headBacking;
+    NSImage *_officeFigure,*_officeHover,*_officeClick,*_headBacking;
     NSData *_headAlpha;
     size_t _alphaWidth,_alphaHeight;
     NSEvent *_headPress;
     NSPoint _pressScreen;
     BOOL _draggingHead;
     double _clickUntil;
-    KCOfficeState _targetPose;
-    double _weights[4],_fromWeights[4],_transitionStart;
     NSMutableDictionary<NSString *,NSImage *> *_images;
     NSMutableDictionary<NSNumber *,NSNumber *> *_keysDown;
     NSMutableArray<KCCap *> *_caps;
     NSPoint _mousePaw, _spaceKey, _pointer, _left, _freeLeft, _right, _leftKey, _rightKey;
+    NSInteger _leftCode,_rightCode;
     NSPoint _travel, _screenPosition, _offset;
     BOOL _pointerKnown, _headHovered, _leftDown, _rightDown;
     double _time,_lastKey,_leftAt,_rightAt,_lastMove,_leftClick,_rightClick,_lastPet,_nextBlink;
@@ -60,30 +59,29 @@ static NSImage *OfficeImage(NSString *name,NSString *directory) {
     NSData *data=[NSData dataWithContentsOfURL:[_assetDir URLByAppendingPathComponent:@"atlas.json"]];
     NSDictionary *atlas=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:NULL]:nil;
     if([atlas isKindOfClass:NSDictionary.class]) {
-        _sprites=atlas[@"sprites"];_keys=atlas[@"keys"];_mousePaw=Pair(atlas[@"mousePaw"],NSMakePoint(104,264));
+        _sprites=atlas[@"sprites"];_defaultKeys=atlas[@"keys"];_keysByStyle=atlas[@"keysByStyle"];_keys=_defaultKeys;
+        _mousePaw=Pair(atlas[@"mousePaw"],NSMakePoint(104,264));
         _spaceKey=Pair(_keys[@"32"],NSMakePoint(214,260));
     }
     _images=[NSMutableDictionary dictionary];_keysDown=[NSMutableDictionary dictionary];_caps=[NSMutableArray array];
     [self clearInput];_showsLabels=YES; return self;
 }
 - (BOOL)isPerson { return _catStyle>=4 && _catStyle<=8; }
-- (BOOL)hasArt { return _sprites[@"body-3"] && _sprites[@"portrait-8"] && _keys.count>0 && _personStyles.count==5 && (!self.isPerson || (_headAlpha && _officeHover.valid && _officeClick.valid && _hoverEntry.valid && _clickEntry.valid)); }
+- (BOOL)hasArt { return _sprites[@"body-3"] && _sprites[@"portrait-8"] && _sprites[@"keyboard-4"] && _sprites[@"mouse-4-both"] && [_keysByStyle[@"4"] count]>=256 && _keys.count>0 && _personStyles.count==5 && (!self.isPerson || (_headAlpha && _officeHover.valid && _officeClick.valid)); }
 - (void)loadPersonArt {
     NSArray *names=@[@"OfficeColleague",@"Hairclip",@"Ribbon",@"Headband",@"Glasses"];
     NSString *name=names[_catStyle-4];
     _look=KCOfficeStyle(_catStyle-4,_personStyles[name]);
-    NSString *directory=[@"characters" stringByAppendingPathComponent:_catStyle==4?@"office":name.lowercaseString];
     if(_catStyle==4) {
         _officeFigure=OfficeImage(@"office-colleague",nil);
         _officeHover=OfficeImage(@"office-colleague-hover",nil);
         _officeClick=OfficeImage(@"office-colleague-click",nil);
     } else {
+        NSString *directory=[@"characters" stringByAppendingPathComponent:name.lowercaseString];
         _officeFigure=OfficeImage(@"idle",directory);
         _officeHover=OfficeImage(@"hover",directory);
         _officeClick=OfficeImage(@"click",directory);
     }
-    _hoverEntry=OfficeImage(@"hover-entry",directory);
-    _clickEntry=OfficeImage(@"click-entry",directory);
     _headAlpha=KCOfficeHeadMask(_officeFigure,_look,&_alphaWidth,&_alphaHeight);
     _headBacking=KCOfficeHitBacking(_headAlpha,_alphaWidth);
 }
@@ -140,8 +138,19 @@ static NSImage *OfficeImage(NSString *name,NSString *directory) {
     if(self.isPerson) {
         [self loadPersonArt];
         [self restOfficeHands];
-        [self resetPoseTransition];
     }
+    self.needsDisplay=YES;
+}
+- (NSPoint)targetForKey:(NSInteger)vk {
+    return Pair(_keys[@(vk).stringValue],NSMakePoint(158,258));
+}
+- (void)setKeyboardStyle:(NSInteger)style {
+    _keyboardStyle=style;
+    _keys=_keysByStyle[@(style).stringValue] ?: _defaultKeys;
+    _spaceKey=[self targetForKey:32];
+    if(_leftCode)_leftKey=[self targetForKey:_leftCode];
+    if(_rightCode)_rightKey=[self targetForKey:_rightCode];
+    if(self.isPerson && self.officeState==KCOfficeIdle)_right=_spaceKey;
     self.needsDisplay=YES;
 }
 - (void)restOfficeHands {
@@ -151,6 +160,7 @@ static NSImage *OfficeImage(NSString *name,NSString *directory) {
 }
 - (void)clearInput {
     [_keysDown removeAllObjects];[_caps removeAllObjects];
+    _leftCode=_rightCode=0;
     _left=_freeLeft=NSMakePoint(192,233);_right=NSMakePoint(229,233);
     _travel=_offset=NSZeroPoint;_pointerKnown=NO;_leftDown=_rightDown=_headHovered=NO;
     [self cancelHeadGesture];_clickUntil=0;
@@ -158,13 +168,12 @@ static NSImage *OfficeImage(NSString *name,NSString *directory) {
     _lastMove=_lastKey=_leftAt=_rightAt=_leftClick=_rightClick=_lastPet=_time-10;
     _nextBlink=_time+2.7;_grip=_gazeX=_gazeY=_leftActivity=_rightActivity=_blink=0;self.needsDisplay=YES;
     if(self.isPerson)[self restOfficeHands];
-    [self resetPoseTransition];
 }
 - (void)setShowsLabels:(BOOL)flag { _showsLabels=flag;if(!flag)[_caps removeAllObjects];self.needsDisplay=YES; }
 - (BOOL)usingMouse:(double)now { return self.isPerson || _leftDown || _rightDown || now-_lastMove<.83; }
 - (void)markMouse:(double)now {
     if(![self usingMouse:now] && _leftAt>_rightAt && now-_leftAt<.24) {
-        _rightKey=_leftKey;_rightAt=_leftAt;_leftAt=now-10;
+        _rightKey=_leftKey;_rightCode=_leftCode;_rightAt=_leftAt;_leftAt=now-10;
     }
     _lastMove=now;
 }
@@ -208,28 +217,12 @@ static NSImage *OfficeImage(NSString *name,NSString *directory) {
     if(_leftDown || _rightDown || _time-fmax(_lastKey,_lastMove)<.8)return KCOfficeWorking;
     return KCOfficeIdle;
 }
-- (double)weightForOfficeState:(KCOfficeState)state { return _weights[state]; }
-- (void)resetPoseTransition {
-    _targetPose=KCOfficeIdle;
-    _transitionStart=_time-.20;
-    for(int i=0;i<4;i++)_fromWeights[i]=_weights[i]=(i==KCOfficeIdle);
-}
-- (void)advancePose:(double)now {
-    double t=Smooth((now-_transitionStart)/.20);
-    for(int i=0;i<4;i++)_weights[i]=_fromWeights[i]*(1-t)+(i==_targetPose?t:0);
-    KCOfficeState next=[self officeState];
-    if(next!=_targetPose) {
-        memcpy(_fromWeights,_weights,sizeof(_weights));
-        _targetPose=next;
-        _transitionStart=now;
-    }
-}
 - (void)strike:(NSInteger)vk label:(NSString *)label at:(double)now {
     if(!vk || !label)return;
-    NSString *key=[@(vk) stringValue];NSPoint target=Pair(_keys[key],NSMakePoint(158,258));
+    NSPoint target=[self targetForKey:vk];
     _lastKey=now;_keysDown[@(vk)]=@(now);
-    if(![self usingMouse:now] && (target.x<218 || (vk==32 && _rightAt>_leftAt))) {_leftAt=now;_leftKey=target;}
-    else {_rightAt=now;_rightKey=target;}
+    if(![self usingMouse:now] && (target.x<218 || (vk==32 && _rightAt>_leftAt))) {_leftAt=now;_leftKey=target;_leftCode=vk;}
+    else {_rightAt=now;_rightKey=target;_rightCode=vk;}
     if(!_showsLabels)return;
     if(_caps.count>=9)[_caps removeObjectAtIndex:0];
     KCCap *cap=[KCCap new];cap.label=label;cap.time=now;
@@ -238,7 +231,6 @@ static NSImage *OfficeImage(NSString *name,NSString *directory) {
 }
 - (void)advance:(double)now {
     double dt=Clamp(now-_time,.001,.1);_time=now;
-    if(self.isPerson)[self advancePose:now];
     if(now>_nextBlink+.30)_nextBlink=now+2.6+arc4random_uniform(3700)/1000.;
     _blink=fmax(Pulse(now-_nextBlink,.23),Pulse(now-_lastPet,.59));
     double typing=1-Smooth((now-_lastKey-.95)/.48);
@@ -319,42 +311,20 @@ static NSImage *OfficeImage(NSString *name,NSString *directory) {
     [self drawCaps:ctx];CGContextRestoreGState(ctx);
 }
 - (void)drawOffice:(CGContextRef)ctx {
-    double work=_weights[KCOfficeWorking];
-    double hover=_weights[KCOfficeHover],click=_weights[KCOfficeClick];
-    double finalHover=hover*Smooth((hover-.45)/.55),finalClick=click*Smooth((click-.45)/.55);
-    double weights[]={_weights[KCOfficeIdle]+work,hover-finalHover,finalHover,click-finalClick,finalClick};
-    NSImage *images[]={_officeFigure,_hoverEntry,_officeHover,_clickEntry,_officeClick};
-    if(hover>0 || click>0) {
+    KCOfficeState state=[self officeState];
+    NSImage *image=state==KCOfficeHover?_officeHover:(state==KCOfficeClick?_officeClick:_officeFigure);
+    if(state==KCOfficeHover || state==KCOfficeClick) {
         // Keep the original ears hittable where this pose is narrower. The window server skips zero-alpha pixels.
         NSRect headRect=KCOfficeBounds(_officeFigure,_look);
         headRect.size.height*=_headBacking.size.height/_alphaHeight;
         [_headBacking drawInRect:headRect fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
                         fraction:1 respectFlipped:YES hints:nil];
     }
-    // Add premultiplied colors and alpha on a transparent layer. Opaque faces stay opaque while poses overlap.
-    BOOL mix=weights[0]<1 && finalHover<1 && finalClick<1;
-    if(mix)CGContextBeginTransparencyLayer(ctx,NULL);
-    for(int i=0;i<5;i++)if(weights[i]>0) {
-        [images[i] drawInRect:KCOfficeBounds(images[i],_look) fromRect:NSZeroRect
-                    operation:mix?NSCompositingOperationPlusLighter:NSCompositingOperationSourceOver
-                     fraction:weights[i] respectFlipped:YES hints:nil];
-    }
-    if(mix)CGContextEndTransparencyLayer(ctx);
-    if(work>0) {
-        CGContextSaveGState(ctx);
-        if(work<1) {
-            CGContextSetAlpha(ctx,work);
-            CGContextBeginTransparencyLayer(ctx,NULL);
-        }
-        double restY=_look.top+_look.height*.885;
-        NSPoint right=Mix(NSMakePoint(_look.rightShoulder-5,restY),_right,work);
-        NSPoint left=Mix(NSMakePoint(_look.leftShoulder+5,restY),_left,work);
-        double lift=7*sin(M_PI*work);
-        right.y-=lift;left.y-=lift;
-        KCOfficeArm(ctx,_look,CGPointMake(_look.rightShoulder,_look.shoulderY),right,1);
-        KCOfficeArm(ctx,_look,CGPointMake(_look.leftShoulder,_look.shoulderY),left,-1);
-        if(work<1)CGContextEndTransparencyLayer(ctx);
-        CGContextRestoreGState(ctx);
+    [image drawInRect:KCOfficeBounds(image,_look) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
+             fraction:1 respectFlipped:YES hints:nil];
+    if(state==KCOfficeWorking) {
+        KCOfficeArm(ctx,_look,CGPointMake(_look.rightShoulder,_look.shoulderY),_right,1);
+        KCOfficeArm(ctx,_look,CGPointMake(_look.leftShoulder,_look.shoulderY),_left,-1);
     }
 }
 - (void)drawCat:(CGContextRef)ctx {

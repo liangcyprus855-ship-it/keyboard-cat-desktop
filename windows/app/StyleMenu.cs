@@ -33,6 +33,7 @@ internal sealed class StyleMenu : IDisposable
         Add(parent, "薄荷打字机", KeyboardStyle.Round, selected, choose);
         Add(parent, "冰蓝电竞", KeyboardStyle.Neon, selected, choose);
         Add(parent, "胡桃木", KeyboardStyle.Wood, selected, choose);
+        Add(parent, "苹果妙控键盘", KeyboardStyle.Apple, selected, choose);
         return parent;
     }
 
@@ -43,6 +44,7 @@ internal sealed class StyleMenu : IDisposable
         Add(parent, "雾紫鹅卵石", MouseStyle.Pebble, selected, choose);
         Add(parent, "冰蓝电竞", MouseStyle.Gaming, selected, choose);
         Add(parent, "酒红轨迹球", MouseStyle.Trackball, selected, choose);
+        Add(parent, "苹果妙控鼠标", MouseStyle.Apple, selected, choose);
         return parent;
     }
 

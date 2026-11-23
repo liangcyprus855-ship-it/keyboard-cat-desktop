@@ -68,8 +68,8 @@ static NSSize PetSize(double ratio) {
     _window.collectionBehavior=NSWindowCollectionBehaviorCanJoinAllSpaces|NSWindowCollectionBehaviorFullScreenAuxiliary|
                                NSWindowCollectionBehaviorIgnoresCycle;
     _window.ignoresMouseEvents=_through;
-    _pet=[[KCPetView alloc] initWithFrame:frame];_pet.catStyle=StyleDefault(@"cat",3,8);_pet.keyboardStyle=StyleDefault(@"keyboard",1,3);
-    _pet.mouseStyle=StyleDefault(@"mouse",3,3);_pet.showsLabels=[defaults boolForKey:@"labels"];
+    _pet=[[KCPetView alloc] initWithFrame:frame];_pet.catStyle=StyleDefault(@"cat",3,8);_pet.keyboardStyle=StyleDefault(@"keyboard",1,4);
+    _pet.mouseStyle=StyleDefault(@"mouse",3,4);_pet.showsLabels=[defaults boolForKey:@"labels"];
     _pet.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;_window.contentView=_pet;
     _status=[NSStatusBar.systemStatusBar statusItemWithLength:NSSquareStatusItemLength];
     NSImage *icon=[NSImage imageWithSystemSymbolName:@"pawprint.fill" accessibilityDescription:@"键盘小黑猫"];
@@ -129,7 +129,7 @@ static NSSize PetSize(double ratio) {
     if(!_permission||!_window.visible){[self disconnectTap];return;}
     if(_tap&&CFMachPortIsValid(_tap)){if(!CGEventTapIsEnabled(_tap))[self reenableTap];return;}
     [self disconnectTap];
-    CGEventMask mask=CGEventMaskBit(kCGEventKeyDown)|CGEventMaskBit(kCGEventFlagsChanged)|
+    CGEventMask mask=CGEventMaskBit(kCGEventKeyDown)|CGEventMaskBit(kCGEventFlagsChanged)|CGEventMaskBit(NSEventTypeSystemDefined)|
         CGEventMaskBit(kCGEventLeftMouseDown)|CGEventMaskBit(kCGEventLeftMouseUp)|CGEventMaskBit(kCGEventRightMouseDown)|CGEventMaskBit(kCGEventRightMouseUp);
     _tap=CGEventTapCreate(kCGSessionEventTap,kCGHeadInsertEventTap,kCGEventTapOptionListenOnly,mask,Monitor,(__bridge void *)self);
     if(!_tap)return;
@@ -140,9 +140,21 @@ static NSSize PetSize(double ratio) {
 - (void)receiveType:(CGEventType)type event:(CGEventRef)event {
     if(!_window.visible||_menuOpen||NSApp.modalWindow)return;
     double t=Now();
+    if(type==(CGEventType)NSEventTypeSystemDefined) {
+        if(_pet.keyboardStyle==4) {
+            NSEvent *system=[NSEvent eventWithCGEvent:event];
+            NSInteger key=KCSystemArtworkKey(system.subtype,system.data1);
+            if(key)[_pet strike:key label:KCKeyLabel(key) at:t];
+        }
+        return;
+    }
     if(type==kCGEventKeyDown||type==kCGEventFlagsChanged){
         CGKeyCode code=(CGKeyCode)CGEventGetIntegerValueField(event,kCGKeyboardEventKeycode);
-        if(type==kCGEventFlagsChanged && code!=57 && !CGEventSourceKeyState(kCGEventSourceStateCombinedSessionState,code))return;
+        if(type==kCGEventFlagsChanged && code!=57) {
+            BOOL down=code==63?(CGEventGetFlags(event)&kCGEventFlagMaskSecondaryFn)!=0:
+                CGEventSourceKeyState(kCGEventSourceStateCombinedSessionState,code);
+            if(!down)return;
+        }
         NSInteger vk=KCArtworkKey(code);[_pet strike:vk label:KCKeyLabel(vk) at:t];return;
     }
     if(type==kCGEventLeftMouseDown||type==kCGEventRightMouseDown||type==kCGEventLeftMouseUp||type==kCGEventRightMouseUp){
@@ -202,8 +214,10 @@ static NSSize PetSize(double ratio) {
 - (void)rebuildMenu {
     [_menu removeAllItems];
     [self styleGroup:@"角色样式" choices:@[@"经典黑猫",@"奶油橘猫",@"日本短尾三花",@"长毛虎斑",@"西装同事",@"发卡同事",@"红结同事",@"发带同事",@"圆镜同事"] current:_pet.catStyle action:@selector(catAction:) resource:@"portrait-%ld"];
-    [self styleGroup:@"键盘样式" choices:@[@"经典奶油",@"薄荷打字机",@"冰蓝电竞",@"胡桃木"] current:_pet.keyboardStyle action:@selector(keyboardAction:) resource:@"keyboard-%ld"];
-    [self styleGroup:@"鼠标样式" choices:@[@"奶油滚轮",@"雾紫鹅卵石",@"冰蓝电竞",@"酒红轨迹球"] current:_pet.mouseStyle action:@selector(mouseAction:) resource:@"mouse-%ld-normal"];
+    [self styleGroup:@"键盘样式" choices:@[@"经典奶油",@"薄荷打字机",@"冰蓝电竞",@"胡桃木",@"苹果妙控键盘"] current:_pet.keyboardStyle action:@selector(keyboardAction:) resource:@"keyboard-%ld"];
+    [self styleGroup:@"鼠标样式" choices:@[@"奶油滚轮",@"雾紫鹅卵石",@"冰蓝电竞",@"酒红轨迹球",@"苹果妙控鼠标"] current:_pet.mouseStyle action:@selector(mouseAction:) resource:@"mouse-%ld-normal"];
+    [self entry:@"使用苹果键鼠套装" action:@selector(appleSetup:) menu:_menu].state=
+        (_pet.keyboardStyle==4 && _pet.mouseStyle==4)?NSControlStateValueOn:NSControlStateValueOff;
     [self addSizeControl];
     [_menu addItem:NSMenuItem.separatorItem];
     [self entry:@"显示浮动键帽" action:@selector(labelsAction:) menu:_menu].state=_pet.showsLabels?NSControlStateValueOn:NSControlStateValueOff;
@@ -226,6 +240,14 @@ static NSSize PetSize(double ratio) {
 - (void)catAction:(NSMenuItem *)item { _pet.catStyle=item.tag;[NSUserDefaults.standardUserDefaults setInteger:item.tag forKey:@"cat"];_pet.needsDisplay=YES; }
 - (void)keyboardAction:(NSMenuItem *)item { _pet.keyboardStyle=item.tag;[NSUserDefaults.standardUserDefaults setInteger:item.tag forKey:@"keyboard"];_pet.needsDisplay=YES; }
 - (void)mouseAction:(NSMenuItem *)item { _pet.mouseStyle=item.tag;[NSUserDefaults.standardUserDefaults setInteger:item.tag forKey:@"mouse"];_pet.needsDisplay=YES; }
+- (void)appleSetup:(NSMenuItem *)sender {
+    _pet.keyboardStyle=4;
+    _pet.mouseStyle=4;
+    NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;
+    [defaults setInteger:4 forKey:@"keyboard"];
+    [defaults setInteger:4 forKey:@"mouse"];
+    _pet.needsDisplay=YES;
+}
 - (void)addSizeControl {
     NSMenuItem *item=[self entry:_pet.isPerson?@"角色大小":@"小猫大小" action:NULL menu:_menu];
     NSView *row=[[NSView alloc] initWithFrame:NSMakeRect(0,0,254,56)];
