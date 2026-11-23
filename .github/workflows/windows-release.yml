@@ -43,11 +43,21 @@ jobs:
           }
           gh release create $tag --title "键盘小黑猫 $tag" --notes "Windows 构建，含 键盘小黑猫.exe 与安装包。本版新增 星期三（金色眼睛）与 咖啡（简州猫）两个猫咪样式。"
           $releaseId = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$tag" --jq .id
-          # Upload with explicit percent-encoded names: gh release create mangles
-          # non-ASCII asset names on Windows, so name the assets explicitly here.
+          if (-not $releaseId) { throw 'Could not read the new release id.' }
+          # Upload to uploads.github.com (not api.github.com): the asset-upload
+          # endpoint only exists there. Name the assets explicitly with
+          # percent-encoded names so the Chinese filenames survive
+          # (gh release create mangles them on Windows).
           foreach ($file in @($exe, $installer)) {
             $name = [System.IO.Path]::GetFileName($file)
             $encoded = [System.Uri]::EscapeDataString($name)
             Write-Host "Uploading $name ..."
-            gh api --method POST -H "Content-Type: application/octet-stream" --input $file "repos/$env:GITHUB_REPOSITORY/releases/$releaseId/assets?name=$encoded"
+            gh api --method POST -H "Content-Type: application/octet-stream" --input $file "https://uploads.github.com/repos/$env:GITHUB_REPOSITORY/releases/$releaseId/assets?name=$encoded"
           }
+          # Verify the release actually carries both files under their correct names.
+          $expected = @([System.IO.Path]::GetFileName($exe), [System.IO.Path]::GetFileName($installer))
+          $assets = gh release view $tag --json assets --jq '.assets[].name'
+          foreach ($name in $expected) {
+            if ($assets -notcontains $name) { throw "Asset $name is missing from release $tag." }
+          }
+          Write-Host "Release $tag has both assets with correct names."
