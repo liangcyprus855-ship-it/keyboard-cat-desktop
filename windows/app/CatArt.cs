@@ -214,7 +214,7 @@ public static partial class CatArt
 
     public static void DrawStyled(DrawingContext dc, CatStyle style, double t, double gazeX, double gazeY,
                                   double blink, Point leftPaw, Point rightPaw, double leftActivity, double rightActivity,
-                                  double pawRaised = -1)
+                                  double pawRaised = -1, Action<DrawingContext> between = null)
     {
         if (style == CatStyle.PhotoTabby)
         {
@@ -243,6 +243,11 @@ public static partial class CatArt
         else if (coffee) Coffee.DrawBodyMarkings(dc, Body);
         else if (silver) SilverShaded.DrawBodyMarkings(dc, Body);
         dc.Pop();
+        // A caller-supplied layer goes here, between the torso and the
+        // forelegs: the gamepad sits in front of the chest and under the
+        // paws that hold it. Drawing it before DrawStyled would leave it
+        // hidden behind the opaque body.
+        if (between != null) between(dc);
         if (styled)
         {
             ArmStyled(dc,false,rightPaw,lean,rightActivity,style,pawRaised);

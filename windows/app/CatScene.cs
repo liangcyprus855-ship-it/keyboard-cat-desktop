@@ -404,8 +404,8 @@ internal sealed class CatScene : FrameworkElement
         dc.PushTransform(new ScaleTransform(ActualWidth / CanvasWidth, ActualHeight / CanvasHeight));
         if (showingGamepad)
         {
-            GamepadArt.Draw(dc, Gamepad, pad);
-            CatArt.DrawStyled(dc, Cat, time, gazeX, gazeY, blink, left, right, leftActivity, rightActivity, 0.25);
+            CatArt.DrawStyled(dc, Cat, time, gazeX, gazeY, blink, left, right, leftActivity, rightActivity, 0.25,
+                delegate(DrawingContext g) { GamepadArt.Draw(g, Gamepad, pad); });
         }
         else
         {

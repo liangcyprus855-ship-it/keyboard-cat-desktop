@@ -205,6 +205,15 @@ internal static class DualSenseInput
                     {
                         HIDP_CAPS caps = new HIDP_CAPS();
                         if (HidD_GetCaps(preparsed, ref caps) != 0) continue;
+                        // A DualSense exposes several HID collections on
+                        // the same VID/PID (gamepad, touchpad-as-mouse,
+                        // audio). Only the gamepad top-level collection
+                        // (Generic Desktop page, Gamepad/Joystick usage)
+                        // carries the buttons, sticks and triggers; the
+                        // touchpad collection would only ever yield mouse
+                        // movement. Skip anything else.
+                        if (caps.UsagePage != 1) continue;
+                        if (caps.Usage != 5 && caps.Usage != 4) continue;
                         int len = caps.InputReportByteLength;
                         if (len < 32) continue;
                         deviceHandle = handle;
