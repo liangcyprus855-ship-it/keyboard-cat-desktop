@@ -218,12 +218,12 @@ public static partial class CatArt
     {
         if (style == CatStyle.PhotoTabby)
         {
-            TabbyArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw,leftActivity,rightActivity);
+            TabbyArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw,leftActivity,rightActivity,between);
             return;
         }
         if (style == CatStyle.JapaneseBobtail)
         {
-            BobtailArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw,leftActivity,rightActivity);
+            BobtailArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw,leftActivity,rightActivity,between);
             return;
         }
         bool ginger = style == CatStyle.Ginger;
