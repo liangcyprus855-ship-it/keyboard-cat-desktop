@@ -17,7 +17,7 @@ internal static class GamepadInput
 {
     // XInput button masks (XINPUT_GAMEPAD_*).
     private const ushort Up = 0x0001, Down = 0x0002, Left = 0x0004, Right = 0x0008;
-    private const ushort Start = 0x0010, Back = 0x0020, L3 = 0x0040, R3 = 0x0080;
+    private const ushort BtnStart = 0x0010, Back = 0x0020, L3 = 0x0040, R3 = 0x0080;
     private const ushort LB = 0x0100, RB = 0x0200;
     private const ushort A = 0x1000, B = 0x2000, X = 0x4000, Y = 0x8000;
 
@@ -152,7 +152,7 @@ internal static class GamepadInput
             new { Mask = Down, Button = GamepadButton.DDown },
             new { Mask = Left, Button = GamepadButton.DLeft },
             new { Mask = Right, Button = GamepadButton.DRight },
-            new { Mask = Start, Button = GamepadButton.Start },
+            new { Mask = BtnStart, Button = GamepadButton.Start },
             new { Mask = Back, Button = GamepadButton.Back },
             new { Mask = L3, Button = GamepadButton.LS },
             new { Mask = R3, Button = GamepadButton.RS },
