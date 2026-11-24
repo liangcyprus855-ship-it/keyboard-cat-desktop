@@ -358,7 +358,7 @@ public static class GamepadArt
         {
             Point c = Project(xs[i], -1);
             double intensity = state.Get(buttons[i]);
-            dc.DrawEllipse(Paint(intensity > 0 ? 0xFFAE37 : 0x989383), null,
+            dc.DrawEllipse(Paint(intensity > 0 ? 0xFFAE37u : 0x989383u), null,
                 c, Rx(1.6, -1), Ry(1.6, -1));
         }
     }
