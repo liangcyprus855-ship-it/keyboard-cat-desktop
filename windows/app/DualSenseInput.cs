@@ -49,8 +49,6 @@ internal static class DualSenseInput
     private static volatile bool connected;
     private static IntPtr deviceHandle = IntPtr.Zero;
     private static int reportLength;
-    private static byte reportId = 0x01; // USB; Bluetooth uses 0x31
-    private static bool styleAnnounced;
 
     private class PadState
     {
@@ -106,14 +104,9 @@ internal static class DualSenseInput
                 {
                     connected = true;
                     report = new byte[reportLength];
-                    styleAnnounced = false;
                     // Announce the PS5 style once per connection.
-                    if (!styleAnnounced)
-                    {
-                        styleAnnounced = true;
-                        Action announce = OnDualSenseConnected;
-                        if (announce != null) Post(announce);
-                    }
+                    Action announce = OnDualSenseConnected;
+                    if (announce != null) Post(announce);
                 }
                 else
                 {
@@ -122,29 +115,22 @@ internal static class DualSenseInput
                 }
             }
 
-            // HidD_GetInputReport needs the wanted report id in byte 0.
-            // A USB DualSense answers 0x01, a Bluetooth one 0x31; try
-            // the current id first, then the other one.
+            // Blocking interrupt read: the controller pushes an input
+            // report whenever its state changes, and ReadFile returns it
+            // (report id in byte 0). This is the standard way to receive
+            // HID input; HidD_GetInputReport (a control transfer) is not
+            // answered by every device, and polling it in a loop also
+            // burns CPU when the pad is idle. ReadFile blocks here, so
+            // the loop wakes only on real input; closing the handle from
+            // Stop() unblocks it.
+            int bytesRead;
             bool ok = false;
             try
             {
-                report[0] = reportId;
-                ok = HidD_GetInputReport(deviceHandle, report, report.Length);
-                if (!ok && reportId == 0x01)
-                {
-                    reportId = 0x31;
-                    report[0] = reportId;
-                    ok = HidD_GetInputReport(deviceHandle, report, report.Length);
-                }
-                else if (!ok && reportId == 0x31)
-                {
-                    reportId = 0x01;
-                    report[0] = reportId;
-                    ok = HidD_GetInputReport(deviceHandle, report, report.Length);
-                }
+                ok = ReadFile(deviceHandle, report, report.Length, out bytesRead, IntPtr.Zero);
             }
             catch (Exception) { ok = false; }
-            if (!ok)
+            if (!ok || bytesRead < 11)
             {
                 // Device gone or read failed: drop it and re-enumerate.
                 CloseDevice();
@@ -155,7 +141,6 @@ internal static class DualSenseInput
             }
 
             ParseAndDispatch(report);
-            Thread.Sleep(16);
         }
     }
 
@@ -204,6 +189,7 @@ internal static class DualSenseInput
                     try
                     {
                         HIDP_CAPS caps = new HIDP_CAPS();
+                        caps.Reserved = new ushort[17];
                         if (HidD_GetCaps(preparsed, ref caps) != 0) continue;
                         // A DualSense exposes several HID collections on
                         // the same VID/PID (gamepad, touchpad-as-mouse,
@@ -396,8 +382,6 @@ internal static class DualSenseInput
     private static extern int HidD_GetCaps(IntPtr preparsedData, ref HIDP_CAPS caps);
     [DllImport("hid.dll", SetLastError = true)]
     private static extern bool HidD_FreePreparsedData(IntPtr preparsedData);
-    [DllImport("hid.dll", SetLastError = true)]
-    private static extern bool HidD_GetInputReport(IntPtr hidDeviceObject, byte[] reportBuffer, int reportBufferLength);
 
     [DllImport("setupapi.dll", SetLastError = true)]
     private static extern IntPtr SetupDiGetClassDevs(ref Guid classGuid, string enumerator, IntPtr hwndParent, int flags);
@@ -412,4 +396,6 @@ internal static class DualSenseInput
     private static extern IntPtr CreateFile(string fileName, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr templateFile);
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool ReadFile(IntPtr handle, byte[] buffer, int bytesToRead, out int bytesRead, IntPtr overlapped);
 }
