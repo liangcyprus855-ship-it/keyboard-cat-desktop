@@ -44,6 +44,14 @@ internal sealed class StyleMenu : IDisposable
         return parent;
     }
 
+    public Forms.ToolStripMenuItem Gamepads(GamepadStyle selected, Action<GamepadStyle> choose)
+    {
+        var parent = Group("手柄款式", 94);
+        Add(parent, "Xbox 手柄", GamepadStyle.Xbox, selected, choose);
+        Add(parent, "PS5 手柄", GamepadStyle.PS5, selected, choose);
+        return parent;
+    }
+
     private static Forms.ToolStripMenuItem Group(string title, int imageWidth)
     {
         var group = new Forms.ToolStripMenuItem(title);
@@ -74,13 +82,15 @@ internal sealed class StyleMenu : IDisposable
     private static Drawing.Bitmap Thumbnail(Enum style)
     {
         bool keyboard = style is KeyboardStyle;
-        int width = keyboard ? 94 : 29;
+        bool gamepad = style is GamepadStyle;
+        int width = keyboard || gamepad ? 94 : 29;
         const int height = 26;
         var art = new DrawingGroup();
         using (DrawingContext dc = art.Open())
         {
             if (keyboard) DeskArt.DrawKeyboard(dc, (KeyboardStyle)(object)style, null);
             else if (style is CatStyle) CatArt.DrawPortrait(dc, (CatStyle)(object)style);
+            else if (gamepad) GamepadArt.Draw(dc, (GamepadStyle)(object)style, new GamepadState());
             else MouseArt.Draw(dc, (MouseStyle)(object)style, 0);
         }
         Rect bounds = art.Bounds;

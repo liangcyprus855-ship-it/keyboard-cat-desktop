@@ -43,7 +43,10 @@ internal sealed class PetWindow : Window
     private readonly CatScene cat = new CatScene();
     private readonly Canvas stage = new Canvas();
     private readonly DispatcherTimer timer = new DispatcherTimer(DispatcherPriority.Render);
-    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private static readonly Stopwatch clock = Stopwatch.StartNew();
+    // The scene's clock, shared with the gamepad poller so its event
+    // timestamps line up with the keyboard / mouse ones.
+    internal static double Now { get { return clock.Elapsed.TotalSeconds; } }
     private readonly Forms.ContextMenuStrip menu = new Forms.ContextMenuStrip();
     private readonly StyleMenu styleMenu = new StyleMenu();
     private readonly Forms.NotifyIcon tray = new Forms.NotifyIcon();
@@ -74,6 +77,9 @@ internal sealed class PetWindow : Window
         cat.Cat = settings.Cat;
         cat.Keyboard = settings.Keyboard;
         cat.Mouse = settings.Mouse;
+        cat.Gamepad = settings.Gamepad;
+        cat.SetGamepadMode(settings.Mode);
+        GamepadInput.Start(cat);
         ApplySize();
         icon = Drawing.Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
         tray.Icon = icon;
@@ -261,6 +267,29 @@ internal sealed class PetWindow : Window
         };
         return size;
     }
+    private Forms.ToolStripMenuItem GamepadModeMenu()
+    {
+        var mode = new Forms.ToolStripMenuItem("手柄模式");
+        foreach (var pair in new[]
+        {
+            new { Title = "自动", Value = GamepadMode.Auto },
+            new { Title = "键盘", Value = GamepadMode.Keyboard },
+            new { Title = "手柄", Value = GamepadMode.Gamepad },
+        })
+        {
+            var item = new Forms.ToolStripMenuItem(pair.Title);
+            item.Checked = settings.Mode == pair.Value;
+            GamepadMode value = pair.Value;
+            item.Click += delegate
+            {
+                settings.Mode = value;
+                cat.SetGamepadMode(value);
+                Save();
+            };
+            mode.DropDownItems.Add(item);
+        }
+        return mode;
+    }
     private void BuildMenu(object sender, CancelEventArgs e)
     {
         menuOpen = true;
@@ -279,6 +308,12 @@ internal sealed class PetWindow : Window
         menu.Items.Add(styleMenu.Mice(settings.Mouse, delegate(MouseStyle next)
         {
             settings.Mouse = cat.Mouse = next;
+            cat.InvalidateVisual(); Save();
+        }));
+        menu.Items.Add(GamepadModeMenu());
+        menu.Items.Add(styleMenu.Gamepads(settings.Gamepad, delegate(GamepadStyle next)
+        {
+            settings.Gamepad = cat.Gamepad = next;
             cat.InvalidateVisual(); Save();
         }));
         menu.Items.Add(Item("显示浮动键帽", settings.Labels, delegate
@@ -303,6 +338,7 @@ internal sealed class PetWindow : Window
     private void CleanUp()
     {
         timer.Stop(); Save();
+        GamepadInput.Stop();
         if (listening) { listening = false; try { WindowsInput.Listen(hwnd, false); } catch (Win32Exception) { } }
         if (source != null) source.RemoveHook(Messages);
         if (inputBuffer != IntPtr.Zero) { Marshal.FreeHGlobal(inputBuffer); inputBuffer = IntPtr.Zero; }

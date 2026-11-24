@@ -105,10 +105,10 @@ public static partial class CatArt
                          z*z*z*a.Y+3*z*z*t*b.Y+3*z*t*t*c.Y+t*t*t*d.Y);
     }
 
-    private static void Arm(DrawingContext dc, bool left, Point paw, double lean, double activity, bool ginger)
+    private static void Arm(DrawingContext dc, bool left, Point paw, double lean, double activity, bool ginger, double pawRaised = -1)
     {
         double side = left ? -1 : 1;
-        double raised = Smooth((221 - paw.Y)/32);
+        double raised = pawRaised >= 0 ? pawRaised : Smooth((221 - paw.Y)/32);
         Point a = new Point(214 + side*26 - 29*lean, 140);
         double dx = paw.X-a.X, dy=paw.Y-a.Y;
         Point b = new Point(a.X + dx*0.25 + side*(4+8*raised), a.Y+dy*0.37);
@@ -143,7 +143,8 @@ public static partial class CatArt
         }
         // End the continuous foreleg with a soft mitten shape even at oblique key reaches.
         dc.DrawEllipse(Foreleg,null,paw,pawRadius+0.35,pawRadius*(0.94-0.06*activity));
-        if (raised > 0.1)
+        // A fixed raised value (gamepad pose) omits the arc under the paw.
+        if (pawRaised < 0 && raised > 0.1)
         {
             dc.PushOpacity(raised * 0.85);
             StreamGeometry rim = new StreamGeometry();
@@ -212,7 +213,8 @@ public static partial class CatArt
     }
 
     public static void DrawStyled(DrawingContext dc, CatStyle style, double t, double gazeX, double gazeY,
-                                  double blink, Point leftPaw, Point rightPaw, double leftActivity, double rightActivity)
+                                  double blink, Point leftPaw, Point rightPaw, double leftActivity, double rightActivity,
+                                  double pawRaised = -1)
     {
         if (style == CatStyle.PhotoTabby)
         {
@@ -243,14 +245,15 @@ public static partial class CatArt
         dc.Pop();
         if (styled)
         {
-            ArmStyled(dc,false,rightPaw,lean,rightActivity,style);
-            ArmStyled(dc,true,leftPaw,lean,leftActivity,style);
+            ArmStyled(dc,false,rightPaw,lean,rightActivity,style,pawRaised);
+            ArmStyled(dc,true,leftPaw,lean,leftActivity,style,pawRaised);
         }
         else
         {
-            Arm(dc,false,rightPaw,lean,rightActivity,ginger);
-            Arm(dc,true,leftPaw,lean,leftActivity,ginger);
+            Arm(dc,false,rightPaw,lean,rightActivity,ginger,pawRaised);
+            Arm(dc,true,leftPaw,lean,leftActivity,ginger,pawRaised);
         }
+
         dc.PushTransform(new TranslateTransform(214 - 45*lean + gx*3.2, 86 + breath + gy*2.0 + lean*1.2));
         dc.PushTransform(new RotateTransform(gx*2.8 - lean*3.2));
         if (styled) DrawHeadStyled(dc, style, gx, gy, blink); else DrawHead(dc, ginger, gx, gy, blink);
@@ -293,7 +296,7 @@ public static partial class CatArt
         Whiskers(dc,1,gx,ginger);
     }
 
-    // Style-aware variants for Wednesday, Coffee and SilverShaded. The original bool-based
+    // Style-aware variants for Wednesday and Coffee. The original bool-based
     // Tail/Arm/Eye/Whiskers/DrawHead above are kept untouched: ExportArt.cs
     // calls Tail and DrawHead through reflection, and Black/Ginger keep the
     // exact code path they had. Wednesday reuses the black cat's geometry and
@@ -326,10 +329,10 @@ public static partial class CatArt
         else dc.DrawGeometry(Fur, null, tail);
     }
 
-    private static void ArmStyled(DrawingContext dc, bool left, Point paw, double lean, double activity, CatStyle style)
+    private static void ArmStyled(DrawingContext dc, bool left, Point paw, double lean, double activity, CatStyle style, double pawRaised = -1)
     {
         double side = left ? -1 : 1;
-        double raised = Smooth((221 - paw.Y)/32);
+        double raised = pawRaised >= 0 ? pawRaised : Smooth((221 - paw.Y)/32);
         Point a = new Point(214 + side*26 - 29*lean, 140);
         double dx = paw.X-a.X, dy=paw.Y-a.Y;
         Point b = new Point(a.X + dx*0.25 + side*(4+8*raised), a.Y+dy*0.37);
@@ -371,7 +374,8 @@ public static partial class CatArt
         dc.DrawGeometry(Foreleg, null, limb);
         // End the continuous foreleg with a soft mitten shape even at oblique key reaches.
         dc.DrawEllipse(Foreleg,null,paw,pawRadius+0.35,pawRadius*(0.94-0.06*activity));
-        if (raised > 0.1)
+        // A fixed raised value (gamepad pose) omits the arc under the paw.
+        if (pawRaised < 0 && raised > 0.1)
         {
             dc.PushOpacity(raised * 0.85);
             StreamGeometry rim = new StreamGeometry();
