@@ -11,6 +11,8 @@ internal sealed class Preferences
     public CatStyle Cat = CatStyle.Black;
     public KeyboardStyle Keyboard = KeyboardStyle.Classic;
     public MouseStyle Mouse = MouseStyle.Classic;
+    public GamepadStyle Gamepad = GamepadStyle.Xbox;
+    public GamepadMode Mode = GamepadMode.Auto;
     private static string FileName
     {
         get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -36,6 +38,8 @@ internal sealed class Preferences
                 p.Cat = ReadStyle(root, "catStyle", p.Cat);
                 p.Keyboard = ReadStyle(root, "keyboard", p.Keyboard);
                 p.Mouse = ReadStyle(root, "mouse", p.Mouse);
+                p.Gamepad = ReadStyle(root, "gamepad", p.Gamepad);
+                p.Mode = ReadStyle(root, "gamepadMode", p.Mode);
             }
         }
         catch (Exception) { return new Preferences(); }
@@ -57,7 +61,8 @@ internal sealed class Preferences
                 new XAttribute("scale", Scale), new XAttribute("labels", Labels),
                 new XAttribute("clickThrough", ClickThrough), new XAttribute("onTop", OnTop),
                 new XAttribute("catStyle", Cat),
-                new XAttribute("keyboard", Keyboard), new XAttribute("mouse", Mouse));
+                new XAttribute("keyboard", Keyboard), new XAttribute("mouse", Mouse),
+                new XAttribute("gamepad", Gamepad), new XAttribute("gamepadMode", Mode));
             string tmp = FileName + ".tmp";
             settings.Save(tmp);
             if (File.Exists(FileName)) File.Replace(tmp, FileName, null);

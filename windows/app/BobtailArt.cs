@@ -229,7 +229,8 @@ internal static class BobtailArt
     }
 
     public static void Draw(DrawingContext dc, double time, double gazeX, double gazeY, double blink,
-                            Point leftPaw, Point rightPaw, double leftActivity, double rightActivity)
+                            Point leftPaw, Point rightPaw, double leftActivity, double rightActivity,
+                            Action<DrawingContext> between = null)
     {
         double lean=Lean(leftPaw);
         dc.PushTransform(new TranslateTransform(249,207));
@@ -244,6 +245,10 @@ internal static class BobtailArt
         dc.Pop();
         dc.Pop();
         dc.Pop();
+        // Same layering as the base cat: a caller-supplied layer (the
+        // gamepad) goes between the torso and the forelegs, or the opaque
+        // body hides it.
+        if (between != null) between(dc);
         DrawArm(dc,new Point(214+25*BodyWidth-29*lean,BodyTop+23),rightPaw,1,rightActivity);
         DrawArm(dc,new Point(214-25*BodyWidth-29*lean,BodyTop+23),leftPaw,-1,leftActivity);
         dc.PushTransform(new MatrixTransform(HeadPose(time,gazeX,gazeY,lean)));
