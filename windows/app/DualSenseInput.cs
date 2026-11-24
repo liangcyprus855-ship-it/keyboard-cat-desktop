@@ -190,7 +190,10 @@ internal static class DualSenseInput
                     {
                         HIDP_CAPS caps = new HIDP_CAPS();
                         caps.Reserved = new ushort[17];
-                        if (HidD_GetCaps(preparsed, ref caps) != 0) continue;
+                        // HidD_GetCaps returns BOOLEAN (TRUE = 1 on success,
+                        // FALSE = 0 on failure). Skip only when it fails;
+                        // a non-zero return means the caps are valid.
+                        if (!HidD_GetCaps(preparsed, ref caps)) continue;
                         // A DualSense exposes several HID collections on
                         // the same VID/PID (gamepad, touchpad-as-mouse,
                         // audio). Only the gamepad top-level collection
@@ -378,8 +381,11 @@ internal static class DualSenseInput
     private static extern bool HidD_GetAttributes(IntPtr hidDeviceObject, ref HIDD_ATTRIBUTES attributes);
     [DllImport("hid.dll", SetLastError = true)]
     private static extern bool HidD_GetPreparsedData(IntPtr hidDeviceObject, out IntPtr preparsedData);
+    // BOOLEAN is a 1-byte return; marshal it as U1 so only the low byte
+    // is read. (A plain bool would read a 4-byte BOOL.)
     [DllImport("hid.dll", SetLastError = true)]
-    private static extern int HidD_GetCaps(IntPtr preparsedData, ref HIDP_CAPS caps);
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool HidD_GetCaps(IntPtr preparsedData, ref HIDP_CAPS caps);
     [DllImport("hid.dll", SetLastError = true)]
     private static extern bool HidD_FreePreparsedData(IntPtr preparsedData);
 
