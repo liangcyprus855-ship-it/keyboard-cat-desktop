@@ -294,14 +294,17 @@ internal static class DualSenseInput
         IntPtr buffer = Marshal.AllocHGlobal(required);
         try
         {
-            // cbSize is 8 on 64-bit, 4 + char size on 32-bit; the path
-            // string starts right after it.
-            int header = IntPtr.Size == 8 ? 8 : 4 + Marshal.SystemDefaultCharSize;
-            Marshal.WriteInt32(buffer, header);
+            // cbSize is the value the API validates: 8 on 64-bit,
+            // 4 + char size on 32-bit. But DevicePath itself starts right
+            // after the 4-byte cbSize field (offset 4), not at cbSize —
+            // reading at cbSize skips the leading "\\", leaving "?\" and
+            // CreateFile then rejects the path with ERROR_INVALID_NAME.
+            int cbSize = IntPtr.Size == 8 ? 8 : 4 + Marshal.SystemDefaultCharSize;
+            Marshal.WriteInt32(buffer, cbSize);
             int got;
             if (!SetupDiGetDeviceInterfaceDetail(infoSet, ref iface, buffer, required, out got, IntPtr.Zero))
                 return null;
-            return Marshal.PtrToStringAuto(new IntPtr(buffer.ToInt64() + header));
+            return Marshal.PtrToStringAuto(new IntPtr(buffer.ToInt64() + 4));
         }
         finally { Marshal.FreeHGlobal(buffer); }
     }
