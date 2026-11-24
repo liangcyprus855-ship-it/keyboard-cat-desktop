@@ -18,9 +18,6 @@ internal sealed class StyleMenu : IDisposable
         Add(parent, "奶油橘猫", CatStyle.Ginger, selected, choose);
         Add(parent, "日本短尾三花", CatStyle.JapaneseBobtail, selected, choose);
         Add(parent, "长毛虎斑", CatStyle.PhotoTabby, selected, choose);
-        Add(parent, "星期三", CatStyle.Wednesday, selected, choose);
-        Add(parent, "咖啡", CatStyle.Coffee, selected, choose);
-        Add(parent, "英短银渐层", CatStyle.SilverShaded, selected, choose);
         return parent;
     }
 
