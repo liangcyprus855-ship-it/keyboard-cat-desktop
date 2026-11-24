@@ -41,6 +41,10 @@ internal static class DualSenseInput
     private const int TriggerThreshold = 30;
     private const int StickDeadzone = 12; // raw units out of 128
 
+    // HidP_GetCaps returns an HIDP status code; success is
+    // HIDP_STATUS_SUCCESS (0x00110000), not 0.
+    private const int HidpStatusSuccess = 0x00110000;
+
     // Called on the UI thread when a DualSense is first detected, so the
     // app can switch the style to PS5. Set by the app; may be null.
     public static Action OnDualSenseConnected;
@@ -259,10 +263,15 @@ internal static class DualSenseInput
                             // HidD_GetCaps — HidD_GetCaps does not exist in
                             // hid.dll (the HidD_* functions are device-level;
                             // the HidP_* functions parse preparsed data).
-                            // It returns NTSTATUS, not BOOLEAN: 0
-                            // (STATUS_SUCCESS) means the caps are valid.
+                            // It returns an HIDP status, not a plain
+                            // NTSTATUS: HIDP_STATUS_SUCCESS is 0x00110000,
+                            // not 0. Checking == 0 rejects every successful
+                            // call — that was the last bug: the caps were
+                            // filled in correctly (UsagePage 1, Usage 5,
+                            // InReportLen 64) but the status check threw
+                            // them away.
                             int status = HidP_GetCaps(preparsed, ref caps);
-                            bool capsOk = status == 0;
+                            bool capsOk = status == HidpStatusSuccess;
                             Log("Sony device PID=0x" + attr.ProductID.ToString("X4")
                                 + " GetCaps=" + capsOk
                                 + " status=0x" + status.ToString("X8")
@@ -485,8 +494,8 @@ internal static class DualSenseInput
     [return: MarshalAs(UnmanagedType.U1)]
     private static extern bool HidD_GetPreparsedData(IntPtr hidDeviceObject, out IntPtr preparsedData);
     // HidP_GetCaps (note the P: the HidD_* functions are device-level,
-    // the HidP_* functions parse preparsed data). Returns NTSTATUS:
-    // 0 (STATUS_SUCCESS) on success, so the return is a plain int.
+    // the HidP_* functions parse preparsed data). Returns an HIDP status
+    // code: HIDP_STATUS_SUCCESS (0x00110000) on success, not 0.
     [DllImport("hid.dll", SetLastError = true)]
     private static extern int HidP_GetCaps(IntPtr preparsedData, ref HIDP_CAPS caps);
     [DllImport("hid.dll", SetLastError = true)]
