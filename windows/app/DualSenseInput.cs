@@ -237,44 +237,57 @@ internal static class DualSenseInput
                     if (attr.VendorID != SonyVendorId) continue;
                     if (attr.ProductID != DualSenseProductId
                         && attr.ProductID != DualSenseEdgeProductId) continue;
-                    IntPtr preparsed = IntPtr.Zero;
-                    if (!HidD_GetPreparsedData(handle, out preparsed))
-                    {
-                        Log("Sony device found (PID=0x" + attr.ProductID.ToString("X4")
-                            + ") but GetPreparsedData failed");
-                        continue;
-                    }
+                    // The HID calls below run against real hardware and
+                    // have crashed the process before (the app vanished
+                    // right after the Sony VID/PID line, with no GetCaps
+                    // line). Never let one collection take the app down:
+                    // catch everything, log it, and move on.
                     try
                     {
-                        HIDP_CAPS caps = new HIDP_CAPS();
-                        caps.Reserved = new ushort[17];
-                        // HidD_GetCaps returns BOOLEAN (TRUE = 1 on success,
-                        // FALSE = 0 on failure). Skip only when it fails;
-                        // a non-zero return means the caps are valid.
-                        bool capsOk = HidD_GetCaps(preparsed, ref caps);
-                        Log("Sony device PID=0x" + attr.ProductID.ToString("X4")
-                            + " GetCaps=" + capsOk
-                            + " UsagePage=" + caps.UsagePage
-                            + " Usage=" + caps.Usage
-                            + " InReportLen=" + caps.InputReportByteLength);
-                        if (!capsOk) continue;
-                        // A DualSense exposes several HID collections on
-                        // the same VID/PID (gamepad, touchpad-as-mouse,
-                        // audio). Only the gamepad top-level collection
-                        // (Generic Desktop page, Gamepad/Joystick usage)
-                        // carries the buttons, sticks and triggers; the
-                        // touchpad collection would only ever yield mouse
-                        // movement. Skip anything else.
-                        if (caps.UsagePage != 1) continue;
-                        if (caps.Usage != 5 && caps.Usage != 4) continue;
-                        int len = caps.InputReportByteLength;
-                        if (len < 32) continue;
-                        deviceHandle = handle;
-                        reportLength = len;
-                        Log("Opened DualSense gamepad collection, reportLength=" + len);
-                        return true;
+                        IntPtr preparsed = IntPtr.Zero;
+                        if (!HidD_GetPreparsedData(handle, out preparsed) || preparsed == IntPtr.Zero)
+                        {
+                            Log("Sony device found (PID=0x" + attr.ProductID.ToString("X4")
+                                + ") but GetPreparsedData failed");
+                            continue;
+                        }
+                        try
+                        {
+                            HIDP_CAPS caps = new HIDP_CAPS();
+                            caps.Reserved = new ushort[17];
+                            // HidD_GetCaps returns BOOLEAN (TRUE = 1 on success,
+                            // FALSE = 0 on failure). Skip only when it fails;
+                            // a non-zero return means the caps are valid.
+                            bool capsOk = HidD_GetCaps(preparsed, ref caps);
+                            Log("Sony device PID=0x" + attr.ProductID.ToString("X4")
+                                + " GetCaps=" + capsOk
+                                + " UsagePage=" + caps.UsagePage
+                                + " Usage=" + caps.Usage
+                                + " InReportLen=" + caps.InputReportByteLength);
+                            if (!capsOk) continue;
+                            // A DualSense exposes several HID collections on
+                            // the same VID/PID (gamepad, touchpad-as-mouse,
+                            // audio). Only the gamepad top-level collection
+                            // (Generic Desktop page, Gamepad/Joystick usage)
+                            // carries the buttons, sticks and triggers; the
+                            // touchpad collection would only ever yield mouse
+                            // movement. Skip anything else.
+                            if (caps.UsagePage != 1) continue;
+                            if (caps.Usage != 5 && caps.Usage != 4) continue;
+                            int len = caps.InputReportByteLength;
+                            if (len < 32) continue;
+                            deviceHandle = handle;
+                            reportLength = len;
+                            Log("Opened DualSense gamepad collection, reportLength=" + len);
+                            return true;
+                        }
+                        finally { HidD_FreePreparsedData(preparsed); }
                     }
-                    finally { HidD_FreePreparsedData(preparsed); }
+                    catch (Exception ex)
+                    {
+                        Log("Sony device handling threw: " + ex.GetType().Name + " " + ex.Message);
+                        continue;
+                    }
                 }
                 finally
                 {
@@ -456,18 +469,21 @@ internal static class DualSenseInput
         public IntPtr Reserved;
     }
 
+    // All hid.dll BOOLEAN returns are 1 byte; marshal them as U1 so
+    // only the low byte is read. (A plain bool would read a 4-byte BOOL.)
     [DllImport("hid.dll", SetLastError = true)]
     private static extern void HidD_GetHidGuid(out Guid hidGuid);
     [DllImport("hid.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
     private static extern bool HidD_GetAttributes(IntPtr hidDeviceObject, ref HIDD_ATTRIBUTES attributes);
     [DllImport("hid.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
     private static extern bool HidD_GetPreparsedData(IntPtr hidDeviceObject, out IntPtr preparsedData);
-    // BOOLEAN is a 1-byte return; marshal it as U1 so only the low byte
-    // is read. (A plain bool would read a 4-byte BOOL.)
     [DllImport("hid.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.U1)]
     private static extern bool HidD_GetCaps(IntPtr preparsedData, ref HIDP_CAPS caps);
     [DllImport("hid.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
     private static extern bool HidD_FreePreparsedData(IntPtr preparsedData);
 
     [DllImport("setupapi.dll", SetLastError = true)]
