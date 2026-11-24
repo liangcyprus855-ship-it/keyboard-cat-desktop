@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
@@ -58,6 +59,26 @@ internal static class DualSenseInput
     }
     private static readonly PadState last = new PadState();
 
+    // Diagnostic log. The DualSense path has failed silently on real
+    // hardware more than once, so every step writes one line to a temp
+    // file the user can send back: %TEMP%\keyboard-cat-dualsense.log.
+    // Logging never throws; a failed write is silently dropped.
+    private static readonly string LogPath =
+        Path.Combine(Path.GetTempPath(), "keyboard-cat-dualsense.log");
+    private static int logLines;
+    private static void Log(string msg)
+    {
+        try
+        {
+            // Cap the file so a stuck loop cannot fill the disk.
+            if (logLines >= 2000) return;
+            logLines++;
+            File.AppendAllText(LogPath,
+                DateTime.Now.ToString("HH:mm:ss.fff") + " " + msg + "\r\n");
+        }
+        catch (Exception) { }
+    }
+
     public static bool IsAvailable { get { return connected; } }
 
     public static void Start(CatScene target)
@@ -65,6 +86,7 @@ internal static class DualSenseInput
         if (running) return;
         scene = target;
         running = true;
+        Log("Start: log=" + LogPath);
         pollThread = new Thread(PollLoop) { IsBackground = true, Name = "DualSenseInput" };
         pollThread.Start();
     }
@@ -129,10 +151,12 @@ internal static class DualSenseInput
             {
                 ok = ReadFile(deviceHandle, report, report.Length, out bytesRead, IntPtr.Zero);
             }
-            catch (Exception) { ok = false; }
+            catch (Exception ex) { ok = false; Log("ReadFile threw: " + ex.GetType().Name); }
             if (!ok || bytesRead < 11)
             {
                 // Device gone or read failed: drop it and re-enumerate.
+                Log("ReadFile failed: ok=" + ok + " bytesRead=" + bytesRead
+                    + " err=" + Marshal.GetLastWin32Error());
                 CloseDevice();
                 connected = false;
                 lock (last) { Array.Clear(last.Buttons, 0, last.Buttons.Length); }
@@ -185,7 +209,12 @@ internal static class DualSenseInput
                     if (attr.ProductID != DualSenseProductId
                         && attr.ProductID != DualSenseEdgeProductId) continue;
                     IntPtr preparsed = IntPtr.Zero;
-                    if (!HidD_GetPreparsedData(handle, out preparsed)) continue;
+                    if (!HidD_GetPreparsedData(handle, out preparsed))
+                    {
+                        Log("Sony device found (PID=0x" + attr.ProductID.ToString("X4")
+                            + ") but GetPreparsedData failed");
+                        continue;
+                    }
                     try
                     {
                         HIDP_CAPS caps = new HIDP_CAPS();
@@ -193,7 +222,13 @@ internal static class DualSenseInput
                         // HidD_GetCaps returns BOOLEAN (TRUE = 1 on success,
                         // FALSE = 0 on failure). Skip only when it fails;
                         // a non-zero return means the caps are valid.
-                        if (!HidD_GetCaps(preparsed, ref caps)) continue;
+                        bool capsOk = HidD_GetCaps(preparsed, ref caps);
+                        Log("Sony device PID=0x" + attr.ProductID.ToString("X4")
+                            + " GetCaps=" + capsOk
+                            + " UsagePage=" + caps.UsagePage
+                            + " Usage=" + caps.Usage
+                            + " InReportLen=" + caps.InputReportByteLength);
+                        if (!capsOk) continue;
                         // A DualSense exposes several HID collections on
                         // the same VID/PID (gamepad, touchpad-as-mouse,
                         // audio). Only the gamepad top-level collection
@@ -207,6 +242,7 @@ internal static class DualSenseInput
                         if (len < 32) continue;
                         deviceHandle = handle;
                         reportLength = len;
+                        Log("Opened DualSense gamepad collection, reportLength=" + len);
                         return true;
                     }
                     finally { HidD_FreePreparsedData(preparsed); }
@@ -241,13 +277,25 @@ internal static class DualSenseInput
         finally { Marshal.FreeHGlobal(buffer); }
     }
 
+    private static int reportCount;
     private static void ParseAndDispatch(byte[] report)
     {
         if (report == null || report.Length < 11) return;
+        reportCount++;
+        if (reportCount <= 5)
+        {
+            Log("Report #" + reportCount + " id=0x" + report[0].ToString("X2")
+                + " len=" + report.Length
+                + " bytes=" + BitConverter.ToString(report, 0, Math.Min(11, report.Length)));
+        }
         int offset;
         if (report[0] == 0x01) offset = 0;          // USB
         else if (report[0] == 0x31) offset = 1;    // Bluetooth: payload +1
-        else return;
+        else
+        {
+            if (reportCount <= 5) Log("Report #" + reportCount + ": unexpected id, ignored");
+            return;
+        }
         // After the report id (and the Bluetooth leading byte), the
         // payload is: LX, LY, RX, RY, L2, R2, seq, buttons0, buttons1,
         // buttons2, ...  Index p points at LX.
@@ -302,6 +350,7 @@ internal static class DualSenseInput
             if (pressed[i] == last.Buttons[i]) continue;
             last.Buttons[i] = pressed[i];
             GamepadButton button = (GamepadButton)i;
+            Log("Button " + button + (pressed[i] ? " pressed" : " released"));
             if (pressed[i]) Post(() => scene.GamepadPress(button, now));
             else Post(() => scene.GamepadRelease(button, now));
         }
