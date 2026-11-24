@@ -123,7 +123,7 @@ internal static class DualSenseInput
             // burns CPU when the pad is idle. ReadFile blocks here, so
             // the loop wakes only on real input; closing the handle from
             // Stop() unblocks it.
-            int bytesRead;
+            int bytesRead = 0;
             bool ok = false;
             try
             {
