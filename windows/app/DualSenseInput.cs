@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
@@ -64,27 +62,6 @@ internal static class DualSenseInput
     }
     private static readonly PadState last = new PadState();
 
-    // Diagnostic log. The DualSense path has failed silently on real
-    // hardware more than once, so every step writes one line to a temp
-    // file the user can send back: %TEMP%\keyboard-cat-dualsense.log.
-    // Logging never throws; a failed write is silently dropped.
-    private static readonly string LogPath =
-        Path.Combine(Path.GetTempPath(), "keyboard-cat-dualsense.log");
-    private static int logLines;
-    private static readonly HashSet<string> seenDevices = new HashSet<string>();
-    private static void Log(string msg)
-    {
-        try
-        {
-            // Cap the file so a stuck loop cannot fill the disk.
-            if (logLines >= 2000) return;
-            logLines++;
-            File.AppendAllText(LogPath,
-                DateTime.Now.ToString("HH:mm:ss.fff") + " " + msg + "\r\n");
-        }
-        catch (Exception) { }
-    }
-
     public static bool IsAvailable { get { return connected; } }
 
     public static void Start(CatScene target)
@@ -92,7 +69,6 @@ internal static class DualSenseInput
         if (running) return;
         scene = target;
         running = true;
-        Log("Start: log=" + LogPath);
         pollThread = new Thread(PollLoop) { IsBackground = true, Name = "DualSenseInput" };
         pollThread.Start();
     }
@@ -157,12 +133,10 @@ internal static class DualSenseInput
             {
                 ok = ReadFile(deviceHandle, report, report.Length, out bytesRead, IntPtr.Zero);
             }
-            catch (Exception ex) { ok = false; Log("ReadFile threw: " + ex.GetType().Name); }
+            catch (Exception ex) { ok = false; }
             if (!ok || bytesRead < 11)
             {
                 // Device gone or read failed: drop it and re-enumerate.
-                Log("ReadFile failed: ok=" + ok + " bytesRead=" + bytesRead
-                    + " err=" + Marshal.GetLastWin32Error());
                 CloseDevice();
                 connected = false;
                 lock (last) { Array.Clear(last.Buttons, 0, last.Buttons.Length); }
@@ -194,7 +168,6 @@ internal static class DualSenseInput
             DigcfPresent | DigcfDeviceInterface);
         if (infoSet == IntPtr.Zero || infoSet == new IntPtr(-1))
         {
-            Log("TryOpenDevice: SetupDiGetClassDevs failed, err=" + Marshal.GetLastWin32Error());
             return false;
         }
         try
@@ -206,11 +179,7 @@ internal static class DualSenseInput
             {
                 if (!SetupDiEnumDeviceInterfaces(infoSet, IntPtr.Zero, ref hidGuid, index, ref iface))
                 {
-                    // No more devices (or an error). Log the count once
-                    // per distinct total so we can tell enumeration ran.
-                    string countKey = "count=" + enumerated;
-                    if (seenDevices.Add(countKey))
-                        Log("TryOpenDevice: enumerated " + enumerated + " HID devices, no DualSense opened");
+                    // No more devices (or an error).
                     return false;
                 }
                 enumerated++;
@@ -220,10 +189,6 @@ internal static class DualSenseInput
                     FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
                 if (handle == IntPtr.Zero || handle == new IntPtr(-1))
                 {
-                    string key = "openfail=" + path;
-                    if (seenDevices.Add(key))
-                        Log("TryOpenDevice: CreateFile failed for " + path
-                            + ", err=" + Marshal.GetLastWin32Error());
                     continue;
                 }
                 try
@@ -231,13 +196,6 @@ internal static class DualSenseInput
                     HIDD_ATTRIBUTES attr = new HIDD_ATTRIBUTES();
                     attr.Size = Marshal.SizeOf(typeof(HIDD_ATTRIBUTES));
                     if (!HidD_GetAttributes(handle, ref attr)) continue;
-                    // Log every distinct HID device once, so the log shows
-                    // whether a DualSense (Sony VID) is even present and
-                    // what PID it carries.
-                    string devKey = "vid=0x" + attr.VendorID.ToString("X4")
-                        + " pid=0x" + attr.ProductID.ToString("X4");
-                    if (seenDevices.Add(devKey))
-                        Log("HID device: " + devKey);
                     if (attr.VendorID != SonyVendorId) continue;
                     if (attr.ProductID != DualSenseProductId
                         && attr.ProductID != DualSenseEdgeProductId) continue;
@@ -251,8 +209,6 @@ internal static class DualSenseInput
                         IntPtr preparsed = IntPtr.Zero;
                         if (!HidD_GetPreparsedData(handle, out preparsed) || preparsed == IntPtr.Zero)
                         {
-                            Log("Sony device found (PID=0x" + attr.ProductID.ToString("X4")
-                                + ") but GetPreparsedData failed");
                             continue;
                         }
                         try
@@ -272,12 +228,6 @@ internal static class DualSenseInput
                             // them away.
                             int status = HidP_GetCaps(preparsed, ref caps);
                             bool capsOk = status == HidpStatusSuccess;
-                            Log("Sony device PID=0x" + attr.ProductID.ToString("X4")
-                                + " GetCaps=" + capsOk
-                                + " status=0x" + status.ToString("X8")
-                                + " UsagePage=" + caps.UsagePage
-                                + " Usage=" + caps.Usage
-                                + " InReportLen=" + caps.InputReportByteLength);
                             if (!capsOk) continue;
                             // A DualSense exposes several HID collections on
                             // the same VID/PID (gamepad, touchpad-as-mouse,
@@ -292,14 +242,12 @@ internal static class DualSenseInput
                             if (len < 32) continue;
                             deviceHandle = handle;
                             reportLength = len;
-                            Log("Opened DualSense gamepad collection, reportLength=" + len);
                             return true;
                         }
                         finally { HidD_FreePreparsedData(preparsed); }
                     }
                     catch (Exception ex)
                     {
-                        Log("Sony device handling threw: " + ex.GetType().Name + " " + ex.Message);
                         continue;
                     }
                 }
@@ -336,23 +284,14 @@ internal static class DualSenseInput
         finally { Marshal.FreeHGlobal(buffer); }
     }
 
-    private static int reportCount;
     private static void ParseAndDispatch(byte[] report)
     {
         if (report == null || report.Length < 11) return;
-        reportCount++;
-        if (reportCount <= 5)
-        {
-            Log("Report #" + reportCount + " id=0x" + report[0].ToString("X2")
-                + " len=" + report.Length
-                + " bytes=" + BitConverter.ToString(report, 0, Math.Min(11, report.Length)));
-        }
         int offset;
         if (report[0] == 0x01) offset = 0;          // USB
         else if (report[0] == 0x31) offset = 1;    // Bluetooth: payload +1
         else
         {
-            if (reportCount <= 5) Log("Report #" + reportCount + ": unexpected id, ignored");
             return;
         }
         // After the report id (and the Bluetooth leading byte), the
@@ -409,7 +348,6 @@ internal static class DualSenseInput
             if (pressed[i] == last.Buttons[i]) continue;
             last.Buttons[i] = pressed[i];
             GamepadButton button = (GamepadButton)i;
-            Log("Button " + button + (pressed[i] ? " pressed" : " released"));
             if (pressed[i]) Post(() => scene.GamepadPress(button, now));
             else Post(() => scene.GamepadRelease(button, now));
         }
