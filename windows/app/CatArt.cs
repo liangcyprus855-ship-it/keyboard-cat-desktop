@@ -103,10 +103,10 @@ public static partial class CatArt
                          z*z*z*a.Y+3*z*z*t*b.Y+3*z*t*t*c.Y+t*t*t*d.Y);
     }
 
-    private static void Arm(DrawingContext dc, bool left, Point paw, double lean, double activity, bool ginger)
+    private static void Arm(DrawingContext dc, bool left, Point paw, double lean, double activity, bool ginger, double pawRaised = -1)
     {
         double side = left ? -1 : 1;
-        double raised = Smooth((221 - paw.Y)/32);
+        double raised = pawRaised >= 0 ? pawRaised : Smooth((221 - paw.Y)/32);
         Point a = new Point(214 + side*26 - 29*lean, 140);
         double dx = paw.X-a.X, dy=paw.Y-a.Y;
         Point b = new Point(a.X + dx*0.25 + side*(4+8*raised), a.Y+dy*0.37);
@@ -141,7 +141,8 @@ public static partial class CatArt
         }
         // End the continuous foreleg with a soft mitten shape even at oblique key reaches.
         dc.DrawEllipse(Foreleg,null,paw,pawRadius+0.35,pawRadius*(0.94-0.06*activity));
-        if (raised > 0.1)
+        // A fixed raised value (gamepad pose) omits the arc under the paw.
+        if (pawRaised < 0 && raised > 0.1)
         {
             dc.PushOpacity(raised * 0.85);
             StreamGeometry rim = new StreamGeometry();
@@ -210,16 +211,17 @@ public static partial class CatArt
     }
 
     public static void DrawStyled(DrawingContext dc, CatStyle style, double t, double gazeX, double gazeY,
-                                  double blink, Point leftPaw, Point rightPaw, double leftActivity, double rightActivity)
+                                  double blink, Point leftPaw, Point rightPaw, double leftActivity, double rightActivity,
+                                  double pawRaised = -1, Action<DrawingContext> between = null)
     {
         if (style == CatStyle.PhotoTabby)
         {
-            TabbyArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw,leftActivity,rightActivity);
+            TabbyArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw,leftActivity,rightActivity,between);
             return;
         }
         if (style == CatStyle.JapaneseBobtail)
         {
-            BobtailArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw,leftActivity,rightActivity);
+            BobtailArt.Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw,leftActivity,rightActivity,between);
             return;
         }
         bool ginger = style == CatStyle.Ginger;
@@ -234,8 +236,13 @@ public static partial class CatArt
         dc.DrawGeometry(ginger ? Ginger.BodyFur : Fur, null, Body);
         if (ginger) Ginger.DrawBodyMarkings(dc, Body);
         dc.Pop();
-        Arm(dc,false,rightPaw,lean,rightActivity,ginger);
-        Arm(dc,true,leftPaw,lean,leftActivity,ginger);
+        // A caller-supplied layer goes here, between the torso and the
+        // forelegs: the gamepad sits in front of the chest and under the
+        // paws that hold it. Drawing it before DrawStyled would leave it
+        // hidden behind the opaque body.
+        if (between != null) between(dc);
+        Arm(dc,false,rightPaw,lean,rightActivity,ginger,pawRaised);
+        Arm(dc,true,leftPaw,lean,leftActivity,ginger,pawRaised);
 
         dc.PushTransform(new TranslateTransform(214 - 45*lean + gx*3.2, 86 + breath + gy*2.0 + lean*1.2));
         dc.PushTransform(new RotateTransform(gx*2.8 - lean*3.2));

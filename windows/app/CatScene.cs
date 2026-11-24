@@ -32,12 +32,39 @@ internal sealed class CatScene : FrameworkElement
     public CatStyle Cat = CatStyle.Black;
     public KeyboardStyle Keyboard = KeyboardStyle.Classic;
     public MouseStyle Mouse = MouseStyle.Classic;
+    public GamepadStyle Gamepad = GamepadStyle.Xbox;
+    public GamepadMode GamepadMode = GamepadMode.Auto;
     public const double CanvasWidth = 480, CanvasHeight = 320;
+
+    // Gamepad mode: the pad state drives the drawing (GamepadArt), the paws
+    // grip the controller, and the gaze follows the last pressed button.
+    private readonly GamepadState pad = new GamepadState();
+    private readonly Dictionary<GamepadButton, double> padDown = new Dictionary<GamepadButton, double>();
+    private readonly Dictionary<GamepadButton, double> padUp = new Dictionary<GamepadButton, double>();
+    private readonly List<GamepadButton> padExpired = new List<GamepadButton>();
+    private static readonly Point PadLeftBase = new Point(190.68, 175.49);
+    private static readonly Point PadRightBase = new Point(237.32, 175.49);
+    private Point lastPadKey = new Point(214, 200);
+    private double lastPadActivity = -10, lastModeSwitch = -10;
+    private bool showingGamepad;
 
     public void ClearLabels() { caps.Clear(); InvalidateVisual(); }
 
     public void Strike(int vk, double now)
     {
+        if (GamepadMode == GamepadMode.Gamepad) return;
+        if (showingGamepad)
+        {
+            // Auto mode: a key press after 5 s of pad idleness switches back,
+            // once the 1.5 s dwell after the last switch has passed.
+            if (GamepadMode == GamepadMode.Auto && now - lastPadActivity > 5
+                && now - lastModeSwitch > 1.5)
+            {
+                showingGamepad = false;
+                lastModeSwitch = now;
+            }
+            else return;
+        }
         Point target = DeskArt.KeyPoint(vk);
         lastKey = now;
         strikes[vk] = now;
@@ -58,6 +85,94 @@ internal sealed class CatScene : FrameworkElement
         caps.Add(new Cap { Label = label, Time = now,
             Start = new Point(target.X + random.Next(-5, 6), target.Y - 14),
             Angle = random.Next(-7, 8) });
+    }
+
+    public void SetGamepadMode(GamepadMode mode)
+    {
+        GamepadMode = mode;
+        if (mode == GamepadMode.Gamepad) showingGamepad = true;
+        else if (mode == GamepadMode.Keyboard) showingGamepad = false;
+        InvalidateVisual();
+    }
+
+    public void GamepadPress(GamepadButton button, double now)
+    {
+        lastPadActivity = now;
+        if (GamepadMode == GamepadMode.Keyboard) return;
+        padDown[button] = now;
+        padUp.Remove(button);
+        lastPadKey = GamepadArt.ButtonPoint(Gamepad, button);
+        if (LabelsEnabled)
+        {
+            string label = GamepadArt.Label(Gamepad, button);
+            if (label != null)
+            {
+                if (caps.Count >= 9) caps.RemoveAt(0);
+                caps.Add(new Cap { Label = label, Time = now,
+                    Start = new Point(lastPadKey.X + random.Next(-5, 6), lastPadKey.Y - 14),
+                    Angle = random.Next(-7, 8) });
+            }
+        }
+        if (GamepadMode == GamepadMode.Auto && !showingGamepad && now - lastModeSwitch > 1.5)
+        {
+            showingGamepad = true;
+            lastModeSwitch = now;
+        }
+    }
+
+    public void GamepadRelease(GamepadButton button, double now)
+    {
+        lastPadActivity = now;
+        if (padDown.ContainsKey(button)) padUp[button] = now;
+    }
+
+    public void GamepadStick(bool left, Vector tilt, double now)
+    {
+        lastPadActivity = now;
+        if (GamepadMode == GamepadMode.Keyboard) return;
+        if (tilt.LengthSquared > 1) tilt.Normalize();
+        if (left) pad.LeftStick = tilt; else pad.RightStick = tilt;
+        if (GamepadMode == GamepadMode.Auto && !showingGamepad && now - lastModeSwitch > 1.5)
+        {
+            showingGamepad = true;
+            lastModeSwitch = now;
+        }
+    }
+
+    public void GamepadTrigger(bool left, double value, double now)
+    {
+        if (GamepadMode == GamepadMode.Keyboard) return;
+        value = Math.Max(0, Math.Min(1, value));
+        if (left) pad.LeftTrigger = value; else pad.RightTrigger = value;
+        // The trigger is analog: below the 30/255 threshold it only moves
+        // the visual, it does not count as pad activity (spec section 8).
+        if (value * 255 < 30) return;
+        lastPadActivity = now;
+        if (value > 0 && GamepadMode == GamepadMode.Auto && !showingGamepad
+            && now - lastModeSwitch > 1.5)
+        {
+            showingGamepad = true;
+            lastModeSwitch = now;
+        }
+    }
+
+    private double PadIntensity(GamepadButton button, double now)
+    {
+        double down;
+        if (!padDown.TryGetValue(button, out down)) return 0;
+        double up;
+        if (padUp.TryGetValue(button, out up))
+        {
+            double age = now - up;
+            if (age >= 0.33) return 0;
+            return 1 - Smooth(age / 0.33);
+        }
+        return Math.Min(1, (now - down) / 0.05);
+    }
+
+    private static bool IsLeftPadButton(GamepadStyle style, GamepadButton button)
+    {
+        return GamepadArt.ButtonPoint(style, button).X < 214;
     }
 
     public void Pointer(Point p, bool buttonDown, double now)
@@ -91,6 +206,17 @@ internal sealed class CatScene : FrameworkElement
 
     public void MouseButton(int virtualKey, bool down, double now)
     {
+        if (GamepadMode == GamepadMode.Gamepad) return;
+        if (showingGamepad && down)
+        {
+            if (GamepadMode == GamepadMode.Auto && now - lastPadActivity > 5
+                && now - lastModeSwitch > 1.5)
+            {
+                showingGamepad = false;
+                lastModeSwitch = now;
+            }
+            else return;
+        }
         if (virtualKey == 1)
         {
             if (leftDown == down) return;
@@ -132,6 +258,28 @@ internal sealed class CatScene : FrameworkElement
         time = now;
         if (now > nextBlink + 0.30) nextBlink = now + 2.6 + random.NextDouble() * 3.7;
         blink = Math.Max(Pulse(now - nextBlink, .23), Pulse(now - lastPet, .59));
+        if (showingGamepad) AdvanceGamepad(now, dt);
+        else AdvanceKeyboardMouse(now, dt);
+        for (int i = caps.Count - 1; i >= 0; i--)
+        {
+            // The newest key drifts over to the tail and lingers like the reference.
+            double lifetime = i == caps.Count - 1 ? 5.8 : .89;
+            if (now - caps[i].Time > lifetime) caps.RemoveAt(i);
+        }
+        highlights.Clear();
+        expired.Clear();
+        foreach (var pair in strikes)
+        {
+            double age = now - pair.Value;
+            if (age > .43) expired.Add(pair.Key);
+            else highlights[pair.Key] = 1 - Smooth(age / .43);
+        }
+        foreach (int key in expired) strikes.Remove(key);
+        InvalidateVisual();
+    }
+
+    private void AdvanceKeyboardMouse(double now, double dt)
+    {
         double typing = 1 - Smooth((now - lastKey - .95) / .48);
         double hold = leftDown || rightDown ? 1 : 1 - Smooth((now - lastMove - .55) / .28);
         grip += Clamp(hold - grip, -dt * 10, dt * 12);
@@ -164,22 +312,74 @@ internal sealed class CatScene : FrameworkElement
         double eyeEase = 1 - Math.Exp(-dt * 14);
         gazeX += (tx - gazeX) * eyeEase;
         gazeY += (ty - gazeY) * eyeEase;
-        for (int i = caps.Count - 1; i >= 0; i--)
+    }
+
+    private void AdvanceGamepad(double now, double dt)
+    {
+        // Button intensities: 0.05 s up, hold while down, 0.33 s decay.
+        padExpired.Clear();
+        foreach (var pair in padDown)
         {
-            // The newest key drifts over to the tail and lingers like the reference.
-            double lifetime = i == caps.Count - 1 ? 5.8 : .89;
-            if (now - caps[i].Time > lifetime) caps.RemoveAt(i);
+            double intensity = PadIntensity(pair.Key, now);
+            pad.Set(pair.Key, intensity);
+            if (intensity <= 0 && padUp.ContainsKey(pair.Key)) padExpired.Add(pair.Key);
         }
-        highlights.Clear();
-        expired.Clear();
-        foreach (var pair in strikes)
+        foreach (GamepadButton button in padExpired)
         {
-            double age = now - pair.Value;
-            if (age > .43) expired.Add(pair.Key);
-            else highlights[pair.Key] = 1 - Smooth(age / .43);
+            padDown.Remove(button);
+            padUp.Remove(button);
         }
-        foreach (int key in expired) strikes.Remove(key);
-        InvalidateVisual();
+        // Paws: each paw works the buttons on its side of the screen, and
+        // follows its stick's cap displacement.
+        Point newLeft = PadPaw(true, now);
+        Point newRight = PadPaw(false, now);
+        double armEase = 1 - Math.Exp(-dt * 46);
+        left = Mix(left, newLeft, armEase);
+        right = Mix(right, newRight, armEase);
+        double leftStick = Math.Min(1, pad.RightStick.Length);
+        double rightStick = Math.Min(1, pad.LeftStick.Length);
+        leftActivity = Math.Max(PadPawActivity(true, now), 0.75 * leftStick);
+        rightActivity = Math.Max(PadPawActivity(false, now), 0.75 * rightStick);
+        // Gaze: down at the pad, across to the last pressed button.
+        double tx = Math.Tanh((lastPadKey.X - 214) / 130);
+        double eyeEase = 1 - Math.Exp(-dt * 14);
+        gazeX += (tx - gazeX) * eyeEase;
+        gazeY += (0.9 - gazeY) * eyeEase;
+    }
+
+    private Point PadPaw(bool leftScreen, double now)
+    {
+        Point basePaw = leftScreen ? PadLeftBase : PadRightBase;
+        Point paw = basePaw;
+        foreach (var pair in padDown)
+        {
+            if (IsLeftPadButton(Gamepad, pair.Key) != leftScreen) continue;
+            double beat = Beat(now - pair.Value);
+            if (beat <= 0) continue;
+            Point target = GamepadArt.ButtonPoint(Gamepad, pair.Key);
+            paw += (target - basePaw) * 0.24 * beat;
+            paw.Y += 1.4 * beat;
+        }
+        // The paw follows its stick: the screen-left paw works the right
+        // stick, the screen-right paw the left stick.
+        Vector tilt = leftScreen ? pad.RightStick : pad.LeftStick;
+        if (tilt.LengthSquared > 0)
+        {
+            Vector offset = GamepadArt.StickCapOffset(Gamepad, !leftScreen, tilt);
+            paw += offset * 1.2;
+        }
+        return paw;
+    }
+
+    private double PadPawActivity(bool leftScreen, double now)
+    {
+        double activity = 0;
+        foreach (var pair in padDown)
+        {
+            if (IsLeftPadButton(Gamepad, pair.Key) != leftScreen) continue;
+            activity = Math.Max(activity, Beat(now - pair.Value));
+        }
+        return activity;
     }
 
     private static double Beat(double age)
@@ -202,9 +402,17 @@ internal sealed class CatScene : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         dc.PushTransform(new ScaleTransform(ActualWidth / CanvasWidth, ActualHeight / CanvasHeight));
-        DeskArt.DrawDesk(dc, highlights, ClickGlow(leftDown, leftClickAt), ClickGlow(rightDown, rightClickAt),
-            Keyboard, Mouse, mouseOffset);
-        CatArt.DrawStyled(dc, Cat, time, gazeX, gazeY, blink, left, right, leftActivity, rightActivity);
+        if (showingGamepad)
+        {
+            CatArt.DrawStyled(dc, Cat, time, gazeX, gazeY, blink, left, right, leftActivity, rightActivity, 0.25,
+                delegate(DrawingContext g) { GamepadArt.Draw(g, Gamepad, pad); });
+        }
+        else
+        {
+            DeskArt.DrawDesk(dc, highlights, ClickGlow(leftDown, leftClickAt), ClickGlow(rightDown, rightClickAt),
+                Keyboard, Mouse, mouseOffset);
+            CatArt.DrawStyled(dc, Cat, time, gazeX, gazeY, blink, left, right, leftActivity, rightActivity);
+        }
         for (int i = 0; i < caps.Count; i++)
         {
             Cap cap = caps[i];
