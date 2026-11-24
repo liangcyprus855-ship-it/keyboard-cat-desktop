@@ -471,7 +471,13 @@ internal static class DualSenseInput
     private static extern IntPtr SetupDiGetClassDevs(ref Guid classGuid, string enumerator, IntPtr hwndParent, int flags);
     [DllImport("setupapi.dll", SetLastError = true)]
     private static extern bool SetupDiEnumDeviceInterfaces(IntPtr deviceInfoSet, IntPtr deviceInfoData, ref Guid interfaceClassGuid, int memberIndex, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData);
-    [DllImport("setupapi.dll", SetLastError = true)]
+    // CharSet.Auto is required: without it the ANSI version is called and
+    // writes a 1-byte-per-char path, but GetDevicePath reads it with
+    // PtrToStringAuto (Unicode), producing mojibake that CreateFile then
+    // rejects with ERROR_FILE_NOT_FOUND. That was the whole bug: every
+    // device path was garbage, so no device — DualSense included — could
+    // ever be opened.
+    [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
     private static extern bool SetupDiGetDeviceInterfaceDetail(IntPtr deviceInfoSet, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData, IntPtr deviceInterfaceDetailData, int deviceInterfaceDetailDataSize, out int requiredSize, IntPtr deviceInfoData);
     [DllImport("setupapi.dll", SetLastError = true)]
     private static extern bool SetupDiDestroyDeviceInfoList(IntPtr deviceInfoSet);
