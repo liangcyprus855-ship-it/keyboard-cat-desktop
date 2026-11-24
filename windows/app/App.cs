@@ -80,6 +80,13 @@ internal sealed class PetWindow : Window
         cat.Gamepad = settings.Gamepad;
         cat.SetGamepadMode(settings.Mode);
         GamepadInput.Start(cat);
+        DualSenseInput.OnDualSenseConnected = delegate
+        {
+            settings.Gamepad = cat.Gamepad = GamepadStyle.PS5;
+            cat.InvalidateVisual();
+            Save();
+        };
+        DualSenseInput.Start(cat);
         ApplySize();
         icon = Drawing.Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
         tray.Icon = icon;
@@ -339,6 +346,7 @@ internal sealed class PetWindow : Window
     {
         timer.Stop(); Save();
         GamepadInput.Stop();
+        DualSenseInput.Stop();
         if (listening) { listening = false; try { WindowsInput.Listen(hwnd, false); } catch (Win32Exception) { } }
         if (source != null) source.RemoveHook(Messages);
         if (inputBuffer != IntPtr.Zero) { Marshal.FreeHGlobal(inputBuffer); inputBuffer = IntPtr.Zero; }

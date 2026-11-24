@@ -177,6 +177,7 @@
 - **G2 输入**：`GamepadInput.cs` 与 XInput，附人工验证步骤：插拔手柄、按每个键、推摇杆、拉扳机，确认高亮、键帽和空槽探测的 CPU 占用都正常。停下等我确认。
 - **G3 模式、偏好与托盘**：自动切换、偏好持久化、托盘菜单与款式预览。停下等我确认。
 - **G4 后期（本期不做）**：DualSense 原生 HID 识别，自动选 PS5 款式。
+  - 2026-11-24 更新：用户只有 PS5 手柄可测，G4 提前实现，见 `windows/app/DualSenseInput.cs`（hid.dll + setupapi.dll，读 USB 报告 0x01 / 蓝牙报告 0x31，索尼 VID 0x054C，DualSense 0x0CE6 / Edge 0x0DF2）。接入 DualSense 时自动把款式切到 PS5（`DualSenseInput.OnDualSenseConnected`，由 `App.cs` 接上并写回偏好）。XInput 通路不变，仍覆盖 Xbox / Steam / DS4Windows 映射手柄。
 - 每个里程碑都要保证键盘和鼠标模式的渲染不变（用现有渲染对比）。
 
 ## 10. 已确认的决定
