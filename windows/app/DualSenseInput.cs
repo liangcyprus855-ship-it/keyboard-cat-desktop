@@ -255,12 +255,17 @@ internal static class DualSenseInput
                         {
                             HIDP_CAPS caps = new HIDP_CAPS();
                             caps.Reserved = new ushort[17];
-                            // HidD_GetCaps returns BOOLEAN (TRUE = 1 on success,
-                            // FALSE = 0 on failure). Skip only when it fails;
-                            // a non-zero return means the caps are valid.
-                            bool capsOk = HidD_GetCaps(preparsed, ref caps);
+                            // NOTE: the caps function is HidP_GetCaps, not
+                            // HidD_GetCaps — HidD_GetCaps does not exist in
+                            // hid.dll (the HidD_* functions are device-level;
+                            // the HidP_* functions parse preparsed data).
+                            // It returns NTSTATUS, not BOOLEAN: 0
+                            // (STATUS_SUCCESS) means the caps are valid.
+                            int status = HidP_GetCaps(preparsed, ref caps);
+                            bool capsOk = status == 0;
                             Log("Sony device PID=0x" + attr.ProductID.ToString("X4")
                                 + " GetCaps=" + capsOk
+                                + " status=0x" + status.ToString("X8")
                                 + " UsagePage=" + caps.UsagePage
                                 + " Usage=" + caps.Usage
                                 + " InReportLen=" + caps.InputReportByteLength);
@@ -479,9 +484,11 @@ internal static class DualSenseInput
     [DllImport("hid.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.U1)]
     private static extern bool HidD_GetPreparsedData(IntPtr hidDeviceObject, out IntPtr preparsedData);
+    // HidP_GetCaps (note the P: the HidD_* functions are device-level,
+    // the HidP_* functions parse preparsed data). Returns NTSTATUS:
+    // 0 (STATUS_SUCCESS) on success, so the return is a plain int.
     [DllImport("hid.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.U1)]
-    private static extern bool HidD_GetCaps(IntPtr preparsedData, ref HIDP_CAPS caps);
+    private static extern int HidP_GetCaps(IntPtr preparsedData, ref HIDP_CAPS caps);
     [DllImport("hid.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.U1)]
     private static extern bool HidD_FreePreparsedData(IntPtr preparsedData);
