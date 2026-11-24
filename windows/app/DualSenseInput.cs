@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -66,6 +67,7 @@ internal static class DualSenseInput
     private static readonly string LogPath =
         Path.Combine(Path.GetTempPath(), "keyboard-cat-dualsense.log");
     private static int logLines;
+    private static readonly HashSet<string> seenDevices = new HashSet<string>();
     private static void Log(string msg)
     {
         try
@@ -186,25 +188,52 @@ internal static class DualSenseInput
         HidD_GetHidGuid(out hidGuid);
         IntPtr infoSet = SetupDiGetClassDevs(ref hidGuid, null, IntPtr.Zero,
             DigcfPresent | DigcfDeviceInterface);
-        if (infoSet == IntPtr.Zero || infoSet == new IntPtr(-1)) return false;
+        if (infoSet == IntPtr.Zero || infoSet == new IntPtr(-1))
+        {
+            Log("TryOpenDevice: SetupDiGetClassDevs failed, err=" + Marshal.GetLastWin32Error());
+            return false;
+        }
         try
         {
             SP_DEVICE_INTERFACE_DATA iface = new SP_DEVICE_INTERFACE_DATA();
             iface.cbSize = Marshal.SizeOf(typeof(SP_DEVICE_INTERFACE_DATA));
+            int enumerated = 0;
             for (int index = 0; ; index++)
             {
                 if (!SetupDiEnumDeviceInterfaces(infoSet, IntPtr.Zero, ref hidGuid, index, ref iface))
+                {
+                    // No more devices (or an error). Log the count once
+                    // per distinct total so we can tell enumeration ran.
+                    string countKey = "count=" + enumerated;
+                    if (seenDevices.Add(countKey))
+                        Log("TryOpenDevice: enumerated " + enumerated + " HID devices, no DualSense opened");
                     return false;
+                }
+                enumerated++;
                 string path = GetDevicePath(infoSet, ref iface);
                 if (path == null) continue;
                 IntPtr handle = CreateFile(path, GenericRead | GenericWrite,
                     FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
-                if (handle == IntPtr.Zero || handle == new IntPtr(-1)) continue;
+                if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+                {
+                    string key = "openfail=" + path;
+                    if (seenDevices.Add(key))
+                        Log("TryOpenDevice: CreateFile failed for " + path
+                            + ", err=" + Marshal.GetLastWin32Error());
+                    continue;
+                }
                 try
                 {
                     HIDD_ATTRIBUTES attr = new HIDD_ATTRIBUTES();
                     attr.Size = Marshal.SizeOf(typeof(HIDD_ATTRIBUTES));
                     if (!HidD_GetAttributes(handle, ref attr)) continue;
+                    // Log every distinct HID device once, so the log shows
+                    // whether a DualSense (Sony VID) is even present and
+                    // what PID it carries.
+                    string devKey = "vid=0x" + attr.VendorID.ToString("X4")
+                        + " pid=0x" + attr.ProductID.ToString("X4");
+                    if (seenDevices.Add(devKey))
+                        Log("HID device: " + devKey);
                     if (attr.VendorID != SonyVendorId) continue;
                     if (attr.ProductID != DualSenseProductId
                         && attr.ProductID != DualSenseEdgeProductId) continue;
