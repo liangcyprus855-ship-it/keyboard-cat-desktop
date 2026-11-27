@@ -2,6 +2,7 @@
 #define KC_OFFICE_COLLEAGUE_H
 #import <Cocoa/Cocoa.h>
 #include <math.h>
+#include "keycat_core.h"
 
 // Bounds, head cutoffs and clothing colors are shared with the Windows renderer.
 typedef struct {
@@ -87,27 +88,18 @@ static NSImage *KCOfficeHitBacking(NSData *mask,size_t width) {
     NSImage *backing=[[NSImage alloc] initWithSize:NSMakeSize(width,rows)];
     [backing addRepresentation:rep];return backing;
 }
-static CGPoint OCShift(CGPoint p,CGPoint vector,CGFloat scale) {
-    return CGPointMake(p.x+vector.x*scale,p.y+vector.y*scale);
-}
-static CGPoint OCVector(CGPoint a,CGPoint b) { return CGPointMake(a.x-b.x,a.y-b.y); }
-static CGPoint OCUnit(CGPoint v) {
-    double length=hypot(v.x,v.y);
-    return length>.001?CGPointMake(v.x/length,v.y/length):CGPointMake(0,1);
-}
-static CGPoint OCNormal(CGPoint dir) { return CGPointMake(-dir.y,dir.x); }
-static void OCMove(CGMutablePathRef path,CGPoint p) { CGPathMoveToPoint(path,NULL,p.x,p.y); }
-static void OCLine(CGMutablePathRef path,CGPoint p) { CGPathAddLineToPoint(path,NULL,p.x,p.y); }
-static void OCCurve(CGMutablePathRef path,CGPoint a,CGPoint b,CGPoint c) {
+static void OCMove(CGMutablePathRef path,KCPoint p) { CGPathMoveToPoint(path,NULL,p.x,p.y); }
+static void OCLine(CGMutablePathRef path,KCPoint p) { CGPathAddLineToPoint(path,NULL,p.x,p.y); }
+static void OCCurve(CGMutablePathRef path,KCPoint a,KCPoint b,KCPoint c) {
     CGPathAddCurveToPoint(path,NULL,a.x,a.y,b.x,b.y,c.x,c.y);
 }
-static void OCQuad(CGMutablePathRef path,CGPoint a,CGPoint b) { CGPathAddQuadCurveToPoint(path,NULL,a.x,a.y,b.x,b.y); }
+static void OCQuad(CGMutablePathRef path,KCPoint a,KCPoint b) { CGPathAddQuadCurveToPoint(path,NULL,a.x,a.y,b.x,b.y); }
 static void OCStrokeColor(CGContextRef ctx,unsigned rgb) {
     CGContextSetRGBStrokeColor(ctx,((rgb>>16)&255)/255.,((rgb>>8)&255)/255.,(rgb&255)/255.,1);
 }
 typedef enum { OCSuit, OCSkin, OCShirt } OCBrush;
 static CGGradientRef OCGradient(OCBrush brush,KCPersonStyle style) {
-    static CGGradientRef cache[5][3];
+    static CGGradientRef cache[10][3];
     CGGradientRef *entry=&cache[style.index][brush];
     if(!*entry) {
         const unsigned colors[][2]={{style.sleeveLight,style.sleeveDark},{style.skinLight,style.skinDark},{style.cuffLight,style.cuffDark}};
@@ -140,59 +132,59 @@ static CGPathRef OCHand(void) {
     static CGMutablePathRef p;
     if(!p) {
         p=CGPathCreateMutable();
-        CGPathMoveToPoint(p,NULL,-4.3,-5.2);
-        CGPathAddCurveToPoint(p,NULL,-4.7,-3.3,-5.1,-2,-5.4,-.1);
-        CGPathAddCurveToPoint(p,NULL,-5.6,1.4,-5.4,3.7,-5.1,4.9);
-        CGPathAddCurveToPoint(p,NULL,-4.8,6,-3.7,6,-3.4,4.9);
-        CGPathAddLineToPoint(p,NULL,-3.1,3.5);CGPathAddLineToPoint(p,NULL,-3,6.1);
-        CGPathAddCurveToPoint(p,NULL,-2.9,7.4,-1.2,7.7,-.9,6.3);
-        CGPathAddLineToPoint(p,NULL,-.7,4.1);CGPathAddLineToPoint(p,NULL,-.4,6.8);
-        CGPathAddCurveToPoint(p,NULL,-.2,8.3,1.5,8.2,1.7,6.8);
-        CGPathAddLineToPoint(p,NULL,1.9,4.1);CGPathAddLineToPoint(p,NULL,2.2,6.4);
-        CGPathAddCurveToPoint(p,NULL,2.4,7.8,4,7.5,4.1,6.1);CGPathAddLineToPoint(p,NULL,4.5,1.6);
-        CGPathAddQuadCurveToPoint(p,NULL,4.6,.3,5.1,1);CGPathAddQuadCurveToPoint(p,NULL,5.4,2,6.4,2.1);
-        CGPathAddQuadCurveToPoint(p,NULL,7.9,1.9,7.2,.1);CGPathAddLineToPoint(p,NULL,5.8,-2.7);
-        CGPathAddQuadCurveToPoint(p,NULL,5.2,-4.1,3.8,-5.2);
-        CGPathAddLineToPoint(p,NULL,3.3,-7.8);CGPathAddLineToPoint(p,NULL,-3.5,-7.7);CGPathCloseSubpath(p);
+        CGPathMoveToPoint(p,NULL,-3.6,-7.5);
+        CGPathAddCurveToPoint(p,NULL,-4,-4.1,-5.7,-2.4,-5.6,.8);
+        CGPathAddCurveToPoint(p,NULL,-5.6,3.1,-5.1,5.1,-4,5.3);
+        CGPathAddQuadCurveToPoint(p,NULL,-3.2,5.5,-2.9,4.4);
+        CGPathAddQuadCurveToPoint(p,NULL,-2.6,7,-1.2,7);CGPathAddQuadCurveToPoint(p,NULL,-.2,7,.1,5.3);
+        CGPathAddQuadCurveToPoint(p,NULL,.5,7.3,1.7,7.1);CGPathAddQuadCurveToPoint(p,NULL,3,6.9,3.2,4.5);
+        CGPathAddQuadCurveToPoint(p,NULL,4.5,5.7,5.1,4);CGPathAddLineToPoint(p,NULL,5.5,.9);
+        CGPathAddQuadCurveToPoint(p,NULL,6.8,2.5,7.6,1.4);CGPathAddQuadCurveToPoint(p,NULL,8.3,.3,6.9,-1.7);
+        CGPathAddLineToPoint(p,NULL,4,-5.1);CGPathAddLineToPoint(p,NULL,3.5,-7.5);CGPathCloseSubpath(p);
     }
     return p;
 }
-static void KCOfficeArm(CGContextRef ctx,KCPersonStyle style,CGPoint shoulder,CGPoint target,int side) {
-    const double handScale=1.30;
-    double radians=fmax(-31,fmin(31,-(target.x-shoulder.x)*.34))*M_PI/180;
-    CGPoint down=CGPointMake(-sin(radians),cos(radians));
-    CGPoint palm=OCShift(target,down,-5.5*handScale),wrist=OCShift(palm,down,-7.4*handScale);
-    CGPoint reach=OCVector(wrist,shoulder);
-    double bend=fmax(8,fmin(20,29-hypot(reach.x,reach.y)*.15));
-    CGPoint elbow=OCShift(OCShift(shoulder,reach,.54),OCNormal(OCUnit(reach)),-side*bend);
-    CGPoint upper=OCUnit(OCVector(elbow,shoulder)),lower=OCUnit(OCVector(wrist,elbow));
-    CGPoint a=OCNormal(upper),b=OCNormal(OCUnit(OCShift(upper,lower,1))),c=OCNormal(lower);
-    CGPoint end=OCShift(wrist,lower,-3.6);
-    double radius=fmin(13,fmin(hypot(elbow.x-shoulder.x,elbow.y-shoulder.y),hypot(end.x-elbow.x,end.y-elbow.y))*.38);
-    CGPoint before=OCShift(elbow,upper,-radius),after=OCShift(elbow,lower,radius);
-    double jointWidth=8.5/fmax(.5,a.x*b.x+a.y*b.y);
+static void KCOfficeDrawHand(CGContextRef ctx,KCPersonStyle style,KCOfficeArmGeometry arm) {
+    CGContextSaveGState(ctx);
+    CGContextTranslateCTM(ctx,arm.palm.x,arm.palm.y);
+    CGContextRotateCTM(ctx,arm.handAngleDeg*M_PI/180.);
+    CGContextScaleCTM(ctx,arm.handScaleX,arm.handScaleY);
+    OCPaint(ctx,OCHand(),style,OCSkin,style.skinEdge,.62);
+    CGContextRestoreGState(ctx);
+}
+static void KCOfficeHandAt(CGContextRef ctx,KCPersonStyle style,CGPoint shoulder,CGPoint target,int side) {
+    KCOfficeArmGeometry arm=kc_solve_office_arm(kc_pt(shoulder.x,shoulder.y),kc_pt(target.x,target.y),side,0);
+    KCOfficeDrawHand(ctx,style,arm);
+}
+static void KCOfficeArm(CGContextRef ctx,KCPersonStyle style,CGPoint shoulder,CGPoint target,int side,BOOL resting) {
+    KCOfficeArmGeometry arm=kc_solve_office_arm(kc_pt(shoulder.x,shoulder.y),kc_pt(target.x,target.y),side,resting?1:0);
     CGMutablePathRef sleeve=CGPathCreateMutable();
-    OCMove(sleeve,OCShift(shoulder,a,8));
-    OCCurve(sleeve,OCShift(OCShift(shoulder,upper,9),a,9.8),OCShift(OCShift(before,upper,-4),a,8.5),OCShift(before,a,8.5));
-    OCQuad(sleeve,OCShift(elbow,b,jointWidth),OCShift(after,c,8.5));
-    OCCurve(sleeve,OCShift(OCShift(after,lower,4),c,8.5),OCShift(OCShift(end,lower,-6),c,6.2),OCShift(end,c,5.7));
-    OCLine(sleeve,OCShift(end,c,-5.7));
-    OCCurve(sleeve,OCShift(OCShift(end,lower,-6),c,-6.2),OCShift(OCShift(after,lower,4),c,-8.5),OCShift(after,c,-8.5));
-    OCQuad(sleeve,OCShift(elbow,b,-jointWidth),OCShift(before,a,-8.5));
-    OCCurve(sleeve,OCShift(OCShift(before,upper,-4),a,-8.5),OCShift(OCShift(shoulder,upper,9),a,-9.8),OCShift(shoulder,a,-8));
-    OCCurve(sleeve,OCShift(OCShift(shoulder,a,-8),upper,-9.3),OCShift(OCShift(shoulder,a,8),upper,-9.3),OCShift(shoulder,a,8));
+    OCMove(sleeve,arm.sleeveStart);
+    OCCurve(sleeve,arm.c1a,arm.c1b,arm.before);
+    OCQuad(sleeve,arm.elbowJointOuter,arm.after);
+    OCCurve(sleeve,arm.c2a,arm.c2b,arm.endOuter);
+    OCLine(sleeve,arm.endInner);
+    OCCurve(sleeve,arm.c3a,arm.c3b,arm.afterInner);
+    OCQuad(sleeve,arm.elbowJointInner,arm.beforeInner);
+    OCCurve(sleeve,arm.c4a,arm.c4b,arm.shoulderInner);
+    OCCurve(sleeve,arm.c5a,arm.c5b,arm.sleeveStart);
     CGPathCloseSubpath(sleeve);
     CGContextSaveGState(ctx);CGContextSetLineCap(ctx,kCGLineCapRound);CGContextSetLineJoin(ctx,kCGLineJoinRound);
-    OCPaint(ctx,sleeve,style,OCSuit,style.sleeveEdge,.72);CGPathRelease(sleeve);
-    CGPoint start=OCShift(elbow,b,side*6.7),finish=OCShift(OCShift(elbow,lower,5),b,side*2.2);
+    OCPaint(ctx,sleeve,style,OCSuit,0,0);CGPathRelease(sleeve);
     OCStrokeColor(ctx,style.crease);CGContextSetLineWidth(ctx,.72);
-    CGContextMoveToPoint(ctx,start.x,start.y);CGContextAddLineToPoint(ctx,finish.x,finish.y);CGContextStrokePath(ctx);
-    CGPoint handNormal=OCNormal(down),cuffEdge=OCShift(palm,down,-6.5*handScale);
+    CGContextMoveToPoint(ctx,arm.creaseStart.x,arm.creaseStart.y);
+    CGContextAddLineToPoint(ctx,arm.creaseEnd.x,arm.creaseEnd.y);
+    CGContextStrokePath(ctx);
     CGMutablePathRef cuff=CGPathCreateMutable();
-    OCMove(cuff,OCShift(end,c,5));OCLine(cuff,OCShift(end,c,-5));
-    OCLine(cuff,OCShift(cuffEdge,handNormal,-4*handScale));OCLine(cuff,OCShift(cuffEdge,handNormal,4*handScale));CGPathCloseSubpath(cuff);
+    OCMove(cuff,arm.cuff0);OCLine(cuff,arm.cuff1);
+    OCLine(cuff,arm.cuff2);OCLine(cuff,arm.cuff3);
+    CGPathCloseSubpath(cuff);
     OCPaint(ctx,cuff,style,OCShirt,0,0);CGPathRelease(cuff);
-    CGContextTranslateCTM(ctx,palm.x,palm.y);CGContextRotateCTM(ctx,radians);CGContextScaleCTM(ctx,-side*handScale,handScale);
-    OCPaint(ctx,OCHand(),style,OCSkin,style.skinEdge,.62);CGContextRestoreGState(ctx);
+    OCStrokeColor(ctx,style.sleeveEdge);CGContextSetLineWidth(ctx,.72);
+    CGContextMoveToPoint(ctx,arm.edgeStart.x,arm.edgeStart.y);
+    CGContextAddLineToPoint(ctx,arm.edgeEnd.x,arm.edgeEnd.y);
+    CGContextStrokePath(ctx);
+    KCOfficeDrawHand(ctx,style,arm);
+    CGContextRestoreGState(ctx);
 }
 #endif

@@ -12,7 +12,8 @@ $references = foreach ($name in 'PresentationCore', 'PresentationFramework', 'Wi
     '/reference:' + (Join-Path $framework "WPF\$name.dll")
 }
 $sources = (Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.cs' -File | Sort-Object Name).FullName
-& (Join-Path $framework 'csc.exe') /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 /utf8output /reference:System.Xaml.dll `
+& (Join-Path $framework 'csc.exe') /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 /utf8output `
+    /reference:System.Xaml.dll /reference:System.Web.Extensions.dll `
     @images `
     ('/win32manifest:' + (Join-Path $PSScriptRoot 'desktop.manifest')) `
     ('/win32icon:' + (Join-Path $PSScriptRoot 'cat.ico')) ('/out:' + $outputPath) @references @sources

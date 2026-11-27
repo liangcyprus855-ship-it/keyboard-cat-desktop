@@ -17,16 +17,19 @@ cp "$root/Info.plist" "$contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $domain" "$contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable ScaleTest' "$contents/Info.plist"
 ditto --norsrc --noextattr "$root/resources" "$contents/Resources"
-cp "$root/../assets/"office-colleague{,-hover,-click}.png "$contents/Resources/"
-for person in hairclip ribbon headband glasses; do
+cp "$root/../assets/"office-colleague{,-work,-sleep,-hover,-click}.png "$contents/Resources/"
+for person in hairclip ribbon headband glasses hoodie beret cap boss shiba; do
     mkdir -p "$contents/Resources/characters/$person"
-    cp "$root/../assets/characters/$person/"{idle,hover,click}.png "$contents/Resources/characters/$person/"
+    cp "$root/../assets/characters/$person/"{idle,work,sleep,hover,click}.png "$contents/Resources/characters/$person/"
 done
 cp "$root/../assets/characters/styles.tsv" "$contents/Resources/characters/styles.tsv"
 xcrun --sdk macosx clang -mmacosx-version-min=11.0 -fobjc-arc -fblocks \
+    -Werror=unguarded-availability-new -Werror=implicit-function-declaration \
+    -I"$root/../core" \
     "$root/tests/scale.m" "$root/app/MacKeys.m" "$root/app/PetView.m" \
+    "$root/app/AutoStart.m" "$root/app/Updater.m" "$root/../core/keycat_core.c" \
     -framework Cocoa -framework ApplicationServices -framework CoreGraphics -o "$binary"
 codesign --force --sign - "$app"
 for scenario in fresh legacy restored low high invalid nan office office-restored people people-restored apple apple-restored; do
-    "$binary" "$scenario"
+    KEYCAT_NO_AUTO_UPDATE=1 "$binary" "$scenario"
 done

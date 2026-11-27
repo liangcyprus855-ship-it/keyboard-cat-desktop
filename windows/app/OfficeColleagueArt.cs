@@ -7,22 +7,27 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-internal enum OfficePose { Idle, Working, Hover, Click }
+internal enum OfficePose { Idle, Working, Hover, Click, Sleeping }
 
 internal sealed class OfficeColleagueArt
 {
-    const double HandScale = 1.30;
     static readonly Dictionary<CatStyle,string[]> Styles = ReadStyles();
     static readonly Dictionary<CatStyle,OfficeColleagueArt> Characters = new Dictionary<CatStyle,OfficeColleagueArt>();
+    static readonly Brush SleepInk = FreezeBrush(Color.FromRgb(105, 108, 151));
+    static readonly FormattedText SleepLabel = new FormattedText("Z z", CultureInfo.InvariantCulture,
+        FlowDirection.LeftToRight, new Typeface("Segoe UI Semibold"), 17, SleepInk, 1);
+
     readonly double CenterX, Top, Height, SolidHead, BottomHead;
     readonly Point LeftShoulder, RightShoulder;
     readonly BitmapSource Figure, Portrait;
-    readonly Lazy<BitmapSource> Hover, Click;
+    readonly Lazy<BitmapSource> Work, Sleep, Hover, Click;
     readonly Rect Bounds;
     readonly Lazy<BitArray> HeadMask;
     readonly Lazy<DrawingGroup> HeadHitSurface;
     readonly Brush Suit, Skin, Shirt;
     readonly Pen SuitEdge, Crease, SkinEdge;
+
+    static Brush FreezeBrush(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
     static Dictionary<CatStyle,string[]> ReadStyles()
     {
@@ -58,6 +63,8 @@ internal sealed class OfficeColleagueArt
         Skin=Gradient(color(13),color(14)); SkinEdge=Line(color(15),.62);
         Shirt=Gradient(color(16),color(17));
         Figure=LoadFigure(style==CatStyle.OfficeColleague ? "OfficeColleague" : style+".Idle");
+        Work=new Lazy<BitmapSource>(()=>LoadFigure(style+".Work"));
+        Sleep=new Lazy<BitmapSource>(()=>LoadFigure(style+".Sleep"));
         Hover=new Lazy<BitmapSource>(()=>LoadFigure(style+".Hover"));
         Click=new Lazy<BitmapSource>(()=>LoadFigure(style+".Click"));
         Bounds=ImageBounds(Figure); Portrait=CropPortrait();
@@ -65,14 +72,12 @@ internal sealed class OfficeColleagueArt
         HeadHitSurface=new Lazy<DrawingGroup>(MakeHeadHitSurface);
     }
     static readonly Geometry Hand = Shape(
-        "M -4.3,-5.2 C -4.7,-3.3 -5.1,-2.0 -5.4,-0.1 " +
-        "C -5.6,1.4 -5.4,3.7 -5.1,4.9 C -4.8,6.0 -3.7,6.0 -3.4,4.9 " +
-        "L -3.1,3.5 L -3.0,6.1 C -2.9,7.4 -1.2,7.7 -.9,6.3 " +
-        "L -.7,4.1 L -.4,6.8 C -.2,8.3 1.5,8.2 1.7,6.8 " +
-        "L 1.9,4.1 L 2.2,6.4 C 2.4,7.8 4.0,7.5 4.1,6.1 " +
-        "L 4.5,1.6 Q 4.6,.3 5.1,1.0 Q 5.4,2.0 6.4,2.1 " +
-        "Q 7.9,1.9 7.2,.1 L 5.8,-2.7 Q 5.2,-4.1 3.8,-5.2 " +
-        "L 3.3,-7.8 L -3.5,-7.7 Z");
+        "M -3.6,-7.5 C -4.0,-4.1 -5.7,-2.4 -5.6,.8 " +
+        "C -5.6,3.1 -5.1,5.1 -4.0,5.3 Q -3.2,5.5 -2.9,4.4 " +
+        "Q -2.6,7.0 -1.2,7.0 Q -.2,7.0 .1,5.3 " +
+        "Q .5,7.3 1.7,7.1 Q 3.0,6.9 3.2,4.5 " +
+        "Q 4.5,5.7 5.1,4.0 L 5.5,.9 Q 6.8,2.5 7.6,1.4 " +
+        "Q 8.3,.3 6.9,-1.7 L 4.0,-5.1 L 3.5,-7.5 Z");
 
     static BitmapSource LoadFigure(string name)
     {
@@ -109,8 +114,6 @@ internal sealed class OfficeColleagueArt
         for (int i=0; i<mask.Count; i++)
         {
             int n=i*4;
-            // Along the collar, keep the warm face and hair pixels and exclude
-            // the blue jacket and white shirt sharing those same scan lines.
             mask[i] = pixels[n+3] >= 32 && (i<upper || pixels[n+2]>pixels[n]);
         }
         return mask;
@@ -161,77 +164,109 @@ internal sealed class OfficeColleagueArt
         return HeadMask.Value[y*Figure.PixelWidth+x];
     }
     public void DrawIdle(DrawingContext dc) { dc.DrawImage(Figure,Bounds); }
-    public void Draw(DrawingContext dc, OfficePose pose, Point left, Point right, bool interactive)
+    public void Draw(DrawingContext dc, OfficePose pose, Point left, Point right, bool interactive,
+        bool showLeft = true, bool showRight = true, double time = 0, KCSceneState state = null)
     {
         if (pose == OfficePose.Hover || pose == OfficePose.Click)
         {
-            // The stable head surface keeps layered-window hits on the original
-            // hairline when the current gesture changes its visible outline.
             if (interactive) dc.DrawDrawing(HeadHitSurface.Value);
             BitmapSource figure = pose == OfficePose.Hover ? Hover.Value : Click.Value;
             dc.DrawImage(figure,ImageBounds(figure));
             return;
         }
 
-        DrawIdle(dc);
-        if (pose == OfficePose.Working)
+        if (pose == OfficePose.Sleeping)
         {
-            DrawArm(dc,RightShoulder,right,1);
-            DrawArm(dc,LeftShoulder,left,-1);
+            double nod = .985 + Math.Cos(time * 2.2) * .009;
+            dc.PushTransform(new ScaleTransform(1,nod,CenterX,Bounds.Bottom));
+            dc.DrawImage(Sleep.Value,Bounds);
+            dc.Pop();
+            dc.DrawText(SleepLabel,new Point(Bounds.Right - 10,Bounds.Top + 18 + Math.Sin(time * 2) * 3));
+            return;
         }
+        if (pose != OfficePose.Working || (!showLeft && !showRight))
+        {
+            DrawIdle(dc);
+            return;
+        }
+        KCPoint baseLeft = KeycatCore.kc_pt(LeftShoulder.X, LeftShoulder.Y + 2.0);
+        KCPoint baseRight = KeycatCore.kc_pt(RightShoulder.X, RightShoulder.Y + 2.0);
+        KCOfficeBodyPose body = state != null
+            ? KeycatCore.kc_office_body_pose(state, CenterX, Bounds.Bottom, baseLeft, baseRight)
+            : new KCOfficeBodyPose { leftShoulder = baseLeft, rightShoulder = baseRight };
+        var bodyTransform = new TransformGroup();
+        bodyTransform.Children.Add(new RotateTransform(body.tiltDeg, CenterX, Bounds.Bottom));
+        bodyTransform.Children.Add(new TranslateTransform(body.offsetX, body.offsetY));
+
+        Point animLeft = WpfPt(body.leftShoulder);
+        Point animRight = WpfPt(body.rightShoulder);
+        Point bottomCornerL = new Point(animLeft.X - 8, Bounds.Bottom + body.offsetY - 4);
+        Point bottomCornerR = new Point(animRight.X + 8, Bounds.Bottom + body.offsetY - 4);
+        KCOfficeArmGeometry rightGeom = default(KCOfficeArmGeometry);
+        KCOfficeArmGeometry leftGeom = default(KCOfficeArmGeometry);
+
+        // Draw arms behind the full opaque torso/vest/hair so armholes and hair locks stay seamless.
+        if (!showLeft) DrawArm(dc, SolveArm(animLeft, bottomCornerL, -1, true));
+        if (!showRight) DrawArm(dc, SolveArm(animRight, bottomCornerR, 1, true));
+        if (showRight) DrawArm(dc, rightGeom = SolveArm(animRight, right, 1, false));
+        if (showLeft) DrawArm(dc, leftGeom = SolveArm(animLeft, left, -1, false));
+
+        dc.PushTransform(bodyTransform);
+        dc.DrawImage(Work.Value, Bounds);
+        dc.Pop();
+
+        // Keep active typing/mouse fingers visible above the bottom hem and hair tips.
+        if (showRight) DrawHand(dc, rightGeom);
+        if (showLeft) DrawHand(dc, leftGeom);
     }
 
-    static Vector Unit(Vector v) { return v.LengthSquared>.000001 ? v/v.Length : new Vector(0,1); }
-    static Vector Normal(Vector v) { return new Vector(-v.Y,v.X); }
+    static Point WpfPt(KCPoint p) { return new Point(p.x, p.y); }
 
-    void DrawArm(DrawingContext dc,Point shoulder,Point target,int side)
+    static KCOfficeArmGeometry SolveArm(Point shoulder, Point target, int side, bool resting)
     {
-        // The fingers stay over their target. Bending the elbow outward gives a
-        // tucked, legible forearm when the hand comes up between keystrokes.
-        double angle=Math.Max(-31,Math.Min(31,-(target.X-shoulder.X)*.34));
-        double rad=angle*Math.PI/180;
-        Vector down=new Vector(-Math.Sin(rad),Math.Cos(rad));
-        Point palm=target-down*(5.5*HandScale);
-        Point wrist=palm-down*(7.4*HandScale);
-        Vector reach=wrist-shoulder;
-        double bend=Math.Max(8,Math.Min(20,29-reach.Length*.15));
-        Point elbow=shoulder+reach*.54-Normal(Unit(reach))*side*bend;
-        Vector upper=Unit(elbow-shoulder), lower=Unit(wrist-elbow);
-        Vector a=Normal(upper), b=Normal(Unit(upper+lower)), c=Normal(lower);
-        Point end=wrist-lower*3.6;
-        double radius=Math.Min(13,Math.Min((elbow-shoulder).Length,(end-elbow).Length)*.38);
-        Point before=elbow-upper*radius, after=elbow+lower*radius;
-        Vector joint=b*(8.5/Math.Max(.5,Vector.Multiply(a,b)));
+        return KeycatCore.kc_solve_office_arm(
+            KeycatCore.kc_pt(shoulder.X, shoulder.Y),
+            KeycatCore.kc_pt(target.X, target.Y),
+            side,
+            resting ? 1 : 0);
+    }
+
+    void DrawHand(DrawingContext dc, KCOfficeArmGeometry arm)
+    {
+        dc.PushTransform(new TranslateTransform(arm.palm.x, arm.palm.y));
+        dc.PushTransform(new RotateTransform(arm.handAngleDeg));
+        dc.PushTransform(new ScaleTransform(arm.handScaleX, arm.handScaleY));
+        dc.DrawGeometry(Skin, SkinEdge, Hand);
+        dc.Pop(); dc.Pop(); dc.Pop();
+    }
+
+    void DrawArm(DrawingContext dc, KCOfficeArmGeometry arm)
+    {
         var sleeve=new StreamGeometry();
         using(var g=sleeve.Open())
         {
-            g.BeginFigure(shoulder+a*8,true,true);
-            g.BezierTo(shoulder+upper*9+a*9.8,before-upper*4+a*8.5,before+a*8.5,true,true);
-            g.QuadraticBezierTo(elbow+joint,after+c*8.5,true,true);
-            g.BezierTo(after+lower*4+c*8.5,end-lower*6+c*6.2,end+c*5.7,true,true);
-            g.LineTo(end-c*5.7,true,true);
-            g.BezierTo(end-lower*6-c*6.2,after+lower*4-c*8.5,after-c*8.5,true,true);
-            g.QuadraticBezierTo(elbow-joint,before-a*8.5,true,true);
-            g.BezierTo(before-upper*4-a*8.5,shoulder+upper*9-a*9.8,shoulder-a*8,true,true);
-            g.BezierTo(shoulder-a*8-upper*9.3,shoulder+a*8-upper*9.3,shoulder+a*8,true,true);
+            g.BeginFigure(WpfPt(arm.sleeveStart),true,true);
+            g.BezierTo(WpfPt(arm.c1a),WpfPt(arm.c1b),WpfPt(arm.before),true,true);
+            g.QuadraticBezierTo(WpfPt(arm.elbowJointOuter),WpfPt(arm.after),true,true);
+            g.BezierTo(WpfPt(arm.c2a),WpfPt(arm.c2b),WpfPt(arm.endOuter),true,true);
+            g.LineTo(WpfPt(arm.endInner),true,true);
+            g.BezierTo(WpfPt(arm.c3a),WpfPt(arm.c3b),WpfPt(arm.afterInner),true,true);
+            g.QuadraticBezierTo(WpfPt(arm.elbowJointInner),WpfPt(arm.beforeInner),true,true);
+            g.BezierTo(WpfPt(arm.c4a),WpfPt(arm.c4b),WpfPt(arm.shoulderInner),true,true);
+            g.BezierTo(WpfPt(arm.c5a),WpfPt(arm.c5b),WpfPt(arm.sleeveStart),true,true);
         }
-        dc.DrawGeometry(Suit,SuitEdge,sleeve);
-        dc.DrawLine(Crease,elbow+b*(side*6.7),elbow+lower*5+b*(side*2.2));
-        // A small area of white shirt at the edge of the jacket stays attached
-        // through strong reaches, even when the hand rotates across the board.
-        Vector handNormal=Normal(down);
+        dc.DrawGeometry(Suit,null,sleeve);
+        dc.DrawLine(Crease,WpfPt(arm.creaseStart),WpfPt(arm.creaseEnd));
         var cuff=new StreamGeometry();
         using(var g=cuff.Open())
         {
-            g.BeginFigure(end+c*5.0,true,true); g.LineTo(end-c*5.0,true,true);
-            g.LineTo(palm-down*(6.5*HandScale)-handNormal*(4.0*HandScale),true,true);
-            g.LineTo(palm-down*(6.5*HandScale)+handNormal*(4.0*HandScale),true,true);
+            g.BeginFigure(WpfPt(arm.cuff0),true,true);
+            g.LineTo(WpfPt(arm.cuff1),true,true);
+            g.LineTo(WpfPt(arm.cuff2),true,true);
+            g.LineTo(WpfPt(arm.cuff3),true,true);
         }
         dc.DrawGeometry(Shirt,null,cuff);
-        dc.PushTransform(new TranslateTransform(palm.X,palm.Y));
-        dc.PushTransform(new RotateTransform(angle));
-        dc.PushTransform(new ScaleTransform(-side*HandScale,HandScale));
-        dc.DrawGeometry(Skin,SkinEdge,Hand);
-        dc.Pop(); dc.Pop(); dc.Pop();
+        dc.DrawLine(SuitEdge,WpfPt(arm.edgeStart),WpfPt(arm.edgeEnd));
+        DrawHand(dc, arm);
     }
 }

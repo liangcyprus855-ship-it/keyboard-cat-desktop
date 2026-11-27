@@ -5,10 +5,14 @@ on:
     branches: [main]
     paths:
       - 'macos/**'
+      - 'core/**'
+      - 'assets/**'
       - '.github/workflows/macos.yml'
   pull_request:
     paths:
       - 'macos/**'
+      - 'core/**'
+      - 'assets/**'
       - '.github/workflows/macos.yml'
   workflow_dispatch:
 
@@ -20,9 +24,14 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Test the shared C99 core
+        run: |
+          set -euo pipefail
+          cc -std=c99 -Wall -Wextra -Werror -O2 -Icore core/keycat_core.c core/tests/core_test.c -lm -o "$RUNNER_TEMP/core_test"
+          "$RUNNER_TEMP/core_test"
       - name: Build the universal installer
         run: bash macos/build.sh
-      - name: Test the scale control
+      - name: Test the scale control, auto-start, and updater
         run: bash macos/tests/scale.sh
       - name: Verify the packaged app
         shell: bash

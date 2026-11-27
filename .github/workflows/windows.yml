@@ -1,0 +1,62 @@
+name: Windows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - 'core/**'
+      - 'assets/**'
+      - 'art-tools/**'
+      - '.github/workflows/windows.yml'
+  pull_request:
+    paths:
+      - 'windows/**'
+      - 'core/**'
+      - 'assets/**'
+      - 'art-tools/**'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify generated core matches C99 source
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\core\Sync-Core.ps1 -Check
+      - name: Run Windows unit tests
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tests\run.ps1
+      - name: Verify art exporter build and output
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\art-tools\Export-Art.ps1 -OutputDirectory "$env:RUNNER_TEMP\art-verify"
+      - name: Ensure NSIS 3 is available
+        shell: powershell
+        run: |
+          $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path -LiteralPath $nsis)) {
+            choco install nsis --no-progress -y
+          }
+      - name: Build portable executable and installer
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\build.ps1
+      - name: Generate SHA-256 checksums
+        shell: powershell
+        run: |
+          Get-ChildItem .\windows\build\*.exe | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content -Path .\windows\build\checksums.txt -Encoding ascii
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            windows/build/*.exe
+            windows/build/checksums.txt
+          if-no-files-found: error

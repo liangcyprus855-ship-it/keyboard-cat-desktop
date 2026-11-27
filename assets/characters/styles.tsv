@@ -1,6 +1,11 @@
 style	centerX	top	height	leftShoulder	rightShoulder	shoulderY	solidHead	bottomHead	sleeveLight	sleeveDark	sleeveEdge	crease	skinLight	skinDark	skinEdge	cuffLight	cuffDark
-OfficeColleague	214	46	196	182	246	172	0.55	0.605	393b4a	30323f	292a36	4c4e5d	ffdbb6	ffc49c	e89d70	fffffa	dbdce0
-Hairclip	214	46	196	186	242	180	0.63	0.63	90cfe7	81c3df	73b5d1	a2d8ec	ffdbb6	ffc49c	e89d70	fffffa	dfe9ec
-Ribbon	214	46	196	186	242	178	0.63	0.63	292748	201f43	1a1835	454262	ffdbb6	ffc49c	e89d70	fffffa	dbdce0
-Headband	214	46	196	186	242	180	0.63	0.63	f7ebca	f2e2b8	dccc9f	fff1cc	ffdbb6	ffc49c	e89d70	424ed8	303cca
-Glasses	214	46	196	186	242	176	0.60	0.60	79787b	6d6c6f	606063	929194	ffdbb6	ffc49c	e89d70	878689	646367
+OfficeColleague	214	46	196	188	240	171	0.55	0.605	393b4a	30323f	292a36	4c4e5d	ffdbb6	ffc49c	e89d70	fffffa	dbdce0
+Hairclip	214	46	196	191	237	183	0.63	0.63	90cfe7	81c3df	73b5d1	a2d8ec	ffdbb6	ffc49c	e89d70	fffffa	dfe9ec
+Ribbon	214	46	196	194	234	179	0.63	0.63	292748	201f43	1a1835	454262	ffdbb6	ffc49c	e89d70	fffffa	dbdce0
+Headband	214	46	196	190	238	184	0.63	0.63	f7ebca	f2e2b8	dccc9f	fff1cc	ffdbb6	ffc49c	e89d70	424ed8	303cca
+Glasses	214	46	196	192	236	175	0.60	0.60	79787b	6d6c6f	606063	929194	ffdbb6	ffc49c	e89d70	878689	646367
+Hoodie	214	46	196	190	238	171	0.56	0.56	8e9c7a	7b8868	687456	a0ad8d	ffdbb6	ffc49c	e89d70	7f8d6c	6b7859
+Beret	214	46	196	191	237	177	0.60	0.60	ecc482	e0b36a	c6964f	f5d59c	ffdbb6	ffc49c	e89d70	f7f8fa	dce0e6
+Cap	214	46	196	190	238	174	0.575	0.575	eaaf4f	d99b3a	bd8026	f4bf68	ffdbb6	ffc49c	e89d70	df9f3e	c28426
+Boss	214	46	196	190	238	177	0.60	0.60	f3f5f8	e3e6ed	c5cad4	fafbfd	ffdbb6	ffc49c	e89d70	ffffff	dde2eb
+Shiba	214	46	196	190	238	179	0.62	0.62	f6f8fb	e6eaf0	c8ced8	ffffff	fae6cb	efcb99	cc9962	fbfaf7	dfd8c8

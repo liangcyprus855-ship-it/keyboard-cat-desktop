@@ -173,6 +173,7 @@ Section "Uninstall"
   ${EndIf}
   !insertmacro ManageLink remove-link "${MENU}"
   !insertmacro ManageLink remove-link "${DESK}"
+  ExecWait '"$PLUGINSDIR\SetupTasks.exe" clean-autostart "$INSTDIR\${APPFILE}"' $0
   Delete "$INSTDIR\${UNINSTALL}"
   DeleteRegKey HKCU "${ARP}"
   SetOutPath "$TEMP"

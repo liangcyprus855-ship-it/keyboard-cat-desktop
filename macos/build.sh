@@ -30,7 +30,8 @@ for arch in arm64 x86_64; do
     xcrun --sdk macosx clang -arch "$arch" -isysroot "$sdk" \
         "-mmacosx-version-min=$minimum" -fobjc-arc -fblocks -O2 -g0 \
         -Werror=unguarded-availability-new -Werror=implicit-function-declaration \
-        "$root/app/"*.m -framework Cocoa -framework ApplicationServices \
+        -I"$root/../core" "$root/app/"*.m "$root/../core/keycat_core.c" \
+        -framework Cocoa -framework ApplicationServices \
         -framework CoreGraphics -o "$stage/$arch"
 done
 xcrun lipo -create "$stage/arm64" "$stage/x86_64" -output "$binary"
@@ -39,21 +40,40 @@ xcrun lipo "$binary" -verify_arch arm64 x86_64
 cp "$plist" "$contents/Info.plist"
 printf 'APPL????' > "$contents/PkgInfo"
 ditto --norsrc --noextattr "$root/resources" "$contents/Resources"
-cp "$root/../assets/"office-colleague{,-hover,-click}.png "$contents/Resources/"
-for person in hairclip ribbon headband glasses; do
+cp "$root/../assets/"office-colleague{,-work,-sleep,-hover,-click}.png "$contents/Resources/"
+for person in hairclip ribbon headband glasses hoodie beret cap boss shiba; do
     mkdir -p "$contents/Resources/characters/$person"
-    cp "$root/../assets/characters/$person/"{idle,hover,click}.png "$contents/Resources/characters/$person/"
+    cp "$root/../assets/characters/$person/"{idle,work,sleep,hover,click}.png "$contents/Resources/characters/$person/"
 done
 cp "$root/../assets/characters/styles.tsv" "$contents/Resources/characters/styles.tsv"
-codesign --force --sign - "$app"
+installer_options=()
+if [[ -n "${KEYCAT_APP_SIGN_IDENTITY:-}" && -n "${KEYCAT_INSTALLER_SIGN_IDENTITY:-}" ]]; then
+    codesign --force --options runtime --timestamp --sign "$KEYCAT_APP_SIGN_IDENTITY" "$app"
+    installer_options=(--sign "$KEYCAT_INSTALLER_SIGN_IDENTITY")
+elif [[ -z "${KEYCAT_APP_SIGN_IDENTITY:-}" && -z "${KEYCAT_INSTALLER_SIGN_IDENTITY:-}" ]]; then
+    codesign --force --sign - "$app"
+else
+    echo "Set both Developer ID identities for a distribution build." >&2
+    exit 1
+fi
 codesign --verify --strict --all-architectures "$app"
 
 pkgbuild --root "$stage/payload" --install-location /Applications \
     --component-plist "$root/installer/components.plist" \
     --identifier "$identifier.pkg" --version "$version" "$stage/components/Keycat.pkg"
-productbuild --distribution "$root/installer/distribution.xml" \
+productbuild ${installer_options[@]+"${installer_options[@]}"} --distribution "$root/installer/distribution.xml" \
     --resources "$root/installer/resources" --package-path "$stage/components" \
     "$stage/$package_name"
+
+if [[ -n "${KEYCAT_NOTARY_PROFILE:-}" ]]; then
+    if [[ -z "${KEYCAT_INSTALLER_SIGN_IDENTITY:-}" ]]; then
+        echo "Notarization requires Developer ID signing." >&2
+        exit 1
+    fi
+    xcrun notarytool submit "$stage/$package_name" --keychain-profile "$KEYCAT_NOTARY_PROFILE" --wait
+    xcrun stapler staple "$stage/$package_name"
+    xcrun stapler validate "$stage/$package_name"
+fi
 
 if [[ -e "$output/$app_name" ]]; then
     mv "$output/$app_name" "$stage/previous.app"

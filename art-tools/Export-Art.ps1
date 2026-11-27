@@ -1,8 +1,11 @@
 ﻿[CmdletBinding()]
 param(
-    [string] $OutputDirectory = (Join-Path $PSScriptRoot '../macos/resources/Art')
+    [string] $OutputDirectory = ''
 )
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
+    $OutputDirectory = Join-Path $PSScriptRoot '../macos/resources/Art'
+}
 
 $source = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../windows/app'))
 $destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
@@ -19,7 +22,7 @@ $references = @('WindowsBase', 'PresentationCore', 'PresentationFramework') | Fo
     $dll = Get-Item -LiteralPath (Join-Path $framework ('WPF/' + $_ + '.dll'))
     '/reference:' + $dll.FullName
 }
-$sources = @('DeskStyle', 'DeskArt', 'AppleKeyboard', 'MouseArt', 'CatArt', 'GingerArt', 'BobtailArt', 'TabbyArt', 'OfficeColleagueArt') | ForEach-Object {
+$sources = @('KeycatCore.g', 'DeskStyle', 'DeskArt', 'AppleKeyboard', 'MouseArt', 'CatArt', 'GingerArt', 'BobtailArt', 'TabbyArt', 'DogArt', 'OfficeColleagueArt') | ForEach-Object {
     (Get-Item -LiteralPath (Join-Path $source ($_ + '.cs'))).FullName
 }
 $exportSource = (Get-Item -LiteralPath (Join-Path $PSScriptRoot 'ExportArt.cs')).FullName

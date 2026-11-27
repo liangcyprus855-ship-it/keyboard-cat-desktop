@@ -16,6 +16,7 @@ internal static class ExportArt
     const int Scale = 2;
     static string output;
     static readonly Dictionary<string, object> sprites = new Dictionary<string, object>();
+    static readonly Dictionary<string, object> dogs = new Dictionary<string, object>();
     static readonly Dictionary<string, object> keys = new Dictionary<string, object>();
     static readonly Dictionary<string, double[]> appleKeys = new Dictionary<string, double[]>();
     static readonly Type Ginger = typeof(CatArt).GetNestedType("Ginger", BindingFlags.NonPublic);
@@ -47,13 +48,18 @@ internal static class ExportArt
 
     static void Cats()
     {
-        for(int c=0;c<4;c++){
+        int[] petIds = { 0, 1, 2, 3, 14, 15, 16, 17 };
+        foreach (int c in petIds)
+        {
             int cat=c;
+            bool isDog=DogArt.IsDog((CatStyle)cat);
             bool ginger=c==1;
             Type owner=c<2?typeof(CatArt):c==2?typeof(BobtailArt):typeof(TabbyArt);
             double height=c==3?1.025:1, width=c==3?1.07:.92, bodyTop=237-119*height;
             Sprite("body-"+c, delegate(DrawingContext dc){
-                if(cat<2){
+                if(isDog){
+                    DogArt.For((CatStyle)cat).DrawBodyLayer(dc);
+                } else if(cat<2){
                     Geometry body=Field<Geometry>(typeof(CatArt),"Body");
                     dc.DrawGeometry(ginger?Field<Brush>(Ginger,"BodyFur"):Field<Brush>(owner,"Fur"),null,body);
                     if(ginger)Call(Ginger,"DrawBodyMarkings",dc,body);
@@ -69,7 +75,8 @@ internal static class ExportArt
             for(int phase=0;phase<8;phase++){
                 double angular=2*Math.PI*phase/8;
                 Sprite("tail-"+c+"-"+phase, delegate(DrawingContext dc){
-                    if(cat<2){Call(owner,"Tail",dc,angular/1.9,ginger);}
+                    if(isDog){DogArt.For((CatStyle)cat).DrawTailLayer(dc,angular);}
+                    else if(cat<2){Call(owner,"Tail",dc,angular/1.9,ginger);}
                     else{
                         bool tabby=cat==3;
                         dc.PushTransform(new TranslateTransform(tabby?187:249,tabby?184:207));
@@ -82,7 +89,8 @@ internal static class ExportArt
             for(int ix=0;ix<3;ix++)for(int iy=0;iy<3;iy++)for(int lid=0;lid<3;lid++){
                 double gx=ix-1.0,gy=iy-1.0,blink=lid*.5;
                 Sprite("head-"+c+"-"+ix+"-"+iy+"-"+lid,delegate(DrawingContext dc){
-                    if(cat<2) Call(owner,"DrawHead",dc,ginger,gx,gy,blink);
+                    if(isDog){DogArt.For((CatStyle)cat).DrawHeadLayer(dc,gx,gy,blink);}
+                    else if(cat<2) Call(owner,"DrawHead",dc,ginger,gx,gy,blink);
                     else{
                         dc.PushTransform(new ScaleTransform(cat==2?.95:1.055,cat==2?.99:1));
                         Call(owner,"DrawHead",dc,gx,gy,blink);
@@ -90,9 +98,35 @@ internal static class ExportArt
                     }
                 });
             }
+            if(isDog){
+                var dog=DogArt.For((CatStyle)cat);
+                Sprite("dog-ruff-"+c,delegate(DrawingContext dc){dog.DrawRuffLayer(dc);});
+                var lSegs=dog.GetSegments(true);
+                var rSegs=dog.GetSegments(false);
+                var lMeta=new object[lSegs.Length];
+                var rMeta=new object[rSegs.Length];
+                for(int s=0;s<lSegs.Length;s++){
+                    int seg=s;
+                    Sprite("dog-seg-l-"+c+"-"+s,delegate(DrawingContext dc){dog.DrawSleeveSegLayer(dc,true,seg);});
+                    Sprite("dog-seg-r-"+c+"-"+s,delegate(DrawingContext dc){dog.DrawSleeveSegLayer(dc,false,seg);});
+                    lMeta[s]=new {t0=lSegs[s].T0,t1=lSegs[s].T1,span=lSegs[s].Span};
+                    rMeta[s]=new {t0=rSegs[s].T0,t1=rSegs[s].T1,span=rSegs[s].Span};
+                }
+                Sprite("dog-paw-l-"+c,delegate(DrawingContext dc){dog.DrawPawLayer(dc,true);});
+                Sprite("dog-paw-r-"+c,delegate(DrawingContext dc){dog.DrawPawLayer(dc,false);});
+                dogs.Add(c.ToString(),new {
+                    shoulderL=Position(dog.ShoulderLeft),
+                    restPawL=Position(dog.RestPawLeft),
+                    shoulderR=Position(dog.ShoulderRight),
+                    restPawR=Position(dog.RestPawRight),
+                    tailSpeed=dog.TailSpeed,
+                    segsL=lMeta,
+                    segsR=rMeta
+                });
+            }
             Sprite("portrait-"+c,delegate(DrawingContext dc){CatArt.DrawPortrait(dc,(CatStyle)cat);});
         }
-        for(int c=4;c<=8;c++){
+        for(int c=4;c<=13;c++){
             CatStyle person=(CatStyle)c;
             Sprite("portrait-"+c,delegate(DrawingContext dc){CatArt.DrawPortrait(dc,person);});
         }
@@ -146,7 +180,7 @@ internal static class ExportArt
         Cats();Peripherals();
         var keysByStyle=new Dictionary<string,Dictionary<string,double[]>>();
         keysByStyle.Add(((int)KeyboardStyle.Apple).ToString(),appleKeys);
-        var manifest=new {scale=Scale,sceneWidth=480,sceneHeight=320,mouseCenter=Position(MouseArt.Center),mousePaw=Position(MouseArt.PawTarget),sprites=sprites,keys=keys,keysByStyle=keysByStyle};
+        var manifest=new {scale=Scale,sceneWidth=480,sceneHeight=320,mouseCenter=Position(MouseArt.Center),mousePaw=Position(MouseArt.PawTarget),sprites=sprites,dogs=dogs,keys=keys,keysByStyle=keysByStyle};
         File.WriteAllText(Path.Combine(output,"atlas.json"),new JavaScriptSerializer().Serialize(manifest),new System.Text.UTF8Encoding(false));
         Console.WriteLine("{0} sprite IDs, {1} transparent PNGs, {2} standard and {3} Apple key locations.",
             sprites.Count,Directory.GetFiles(output,"*.png").Length,keys.Count,appleKeys.Count);

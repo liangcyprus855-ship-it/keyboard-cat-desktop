@@ -44,6 +44,7 @@ public static partial class DeskArt
 
     internal static string AppleKeyLabel(int vk)
     {
+        if (vk == 0x2E) return "⌦";
         int code=AppleCode(vk);
         if (code>=112 && code<=123) return "F"+(code-111);
         switch(code)
@@ -52,9 +53,12 @@ public static partial class DeskArt
             case 0xA4: case 0xA5: case 0x12: return "⌥";
             case 0xA2: case 0x11: return "⌃";
             case 0xA0: case 0xA1: case 0x10: return "⇧";
+            case 9: return "⇥";
+            case 13: return "↩";
+            case 20: return "⇪";
             case 0x25: return "←"; case 0x26: return "↑";
             case 0x27: return "→"; case 0x28: return "↓";
-            case 256: return "fn"; case 261: return "锁定";
+            case 256: return "fn"; case 261: return "锁屏";
             case 8: return "⌫";
             default: return null;
         }

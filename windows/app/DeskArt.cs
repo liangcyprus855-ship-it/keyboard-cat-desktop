@@ -343,7 +343,8 @@ public static partial class DeskArt
         dc.Pop();
     }
 
-    public static void DrawCap(DrawingContext dc, string label, Point center, double opacity, double angle)
+    public static void DrawCap(DrawingContext dc, string label, Point center, double opacity, double angle,
+        double scale = 1.0, bool fiery = false)
     {
         if (String.IsNullOrEmpty(label) || opacity <= .001) return;
         FormattedText glyph;
@@ -359,9 +360,12 @@ public static partial class DeskArt
         dc.PushOpacity(Math.Min(1, opacity));
         dc.PushTransform(new TranslateTransform(center.X, center.Y));
         dc.PushTransform(new RotateTransform(angle));
+        if (Math.Abs(scale - 1.0) > 0.001) dc.PushTransform(new ScaleTransform(scale, scale));
         dc.DrawRoundedRectangle(CapShade, CapOutline, new Rect(-width / 2 + .3, -height / 2 + 1.3, width, height), 4, 4);
-        dc.DrawRoundedRectangle(CapFill, CapOutline, new Rect(-width / 2, -height / 2, width, height - .5), 4, 4);
+        dc.DrawRoundedRectangle(CapFill, fiery ? Line(0xFF7D29, 1.35) : CapOutline,
+            new Rect(-width / 2, -height / 2, width, height - .5), 4, 4);
         dc.DrawText(glyph, new Point(-glyph.Width / 2, -glyph.Height / 2 - .8));
+        if (Math.Abs(scale - 1.0) > 0.001) dc.Pop();
         dc.Pop();
         dc.Pop();
         dc.Pop();

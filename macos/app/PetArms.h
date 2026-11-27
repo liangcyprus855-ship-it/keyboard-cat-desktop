@@ -81,7 +81,9 @@ static inline void KCArmStrokeColor(CGContextRef ctx,unsigned color,CGFloat alph
 static CGGradientRef KCArmGradient(int index) {
     // These immutable swatches live as long as the main-thread WPF-equivalent scene.
     static CGGradientRef palette[5];
-    static const unsigned colors[5][2]={{0x1e1c1f,0x18171a},{0xefaa67,0xdf9354},{0xf6eddc,0xf6ecda},{0x9e876a,0xb69d7a},{0xf5efdd,0xece3d1}};
+    static const unsigned colors[5][2]={
+        {0x1e1c1f,0x18171a},{0xefaa67,0xdf9354},{0xf6eddc,0xf6ecda},{0x9e876a,0xb69d7a},{0xf5efdd,0xece3d1}
+    };
     if(!palette[index]){
         CGFloat rgba[8];for(int i=0;i<2;i++){
             unsigned rgb=colors[index][i];

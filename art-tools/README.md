@@ -3,13 +3,13 @@
 macOS 安装包使用仓库里的 `macos/resources/Art`。修改猫、键盘或鼠标的矢量绘制后，可在装有 .NET Framework 4.x 和 WPF 的 Windows 上运行以下命令，更新这套素材。
 
 ```powershell
-.\art-tools\Export-Art.ps1
+powershell -ExecutionPolicy Bypass -File .\art-tools\Export-Art.ps1
 ```
 
 若要对照新旧画面，可指定另一个输出目录。编译和渲染的临时文件位于系统临时目录。
 
 ```powershell
-.\art-tools\Export-Art.ps1 -OutputDirectory '.\art-preview'
+powershell -ExecutionPolicy Bypass -File .\art-tools\Export-Art.ps1 -OutputDirectory '.\art-preview'
 ```
 
 | 要调整的内容 | 对应源码 |
@@ -17,7 +17,8 @@ macOS 安装包使用仓库里的 `macos/resources/Art`。修改猫、键盘或�
 | 黑猫轮廓、姿态和橘猫花纹 | `windows/app/CatArt.cs`、`windows/app/GingerArt.cs` |
 | 三花、长毛虎斑的脸形和被毛 | `windows/app/BobtailArt.cs`、`windows/app/TabbyArt.cs` |
 | 五位人物的姿势、袖色与肩部位置 | `assets/office-colleague*.png`、`assets/characters/`、`assets/characters/styles.tsv` |
-| 人物姿势切换和键鼠操作时的手臂 | `windows/app/OfficeColleagueArt.cs`、`macos/app/OfficeColleague.h` |
+| 动画状态机与人物手臂几何核心 | `core/keycat_core.h`、`core/keycat_core.c`（运行 `core/Sync-Core.ps1` 生成 `windows/app/KeycatCore.g.cs`） |
+| 人物姿势切换与平台渲染 | `windows/app/OfficeColleagueArt.cs`、`macos/app/OfficeColleague.h` |
 | 键盘、键位和鼠标按键外观 | `windows/app/DeskArt.cs`、`windows/app/AppleKeyboard.cs`、`windows/app/MouseArt.cs`、`windows/app/DeskStyle.cs` |
 | 导出图层、视线方向和动画采样 | `art-tools/ExportArt.cs` |
 | macOS 的实时前爪绘制 | `macos/app/PetArms.h` |

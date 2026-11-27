@@ -228,6 +228,11 @@ public static partial class CatArt
             return;
         }
         bool ginger = style == CatStyle.Ginger;
+        if (DogArt.IsDog(style))
+        {
+            DogArt.For(style).Draw(dc,t,gazeX,gazeY,blink,leftPaw,rightPaw,leftActivity,rightActivity);
+            return;
+        }
         double gx=Limit(gazeX,-1,1), gy=Limit(gazeY,-1,1);
         double lean=Smooth((157-leftPaw.X)/50);
         double breath=Math.Sin(t*1.7)*0.72;
@@ -253,6 +258,7 @@ public static partial class CatArt
     public static void DrawPortrait(DrawingContext dc, CatStyle style)
     {
         if (style.IsPerson()) OfficeColleagueArt.For(style).DrawPortrait(dc);
+        else if (DogArt.IsDog(style)) DogArt.For(style).DrawPortrait(dc);
         else if (style == CatStyle.PhotoTabby) TabbyArt.DrawPortrait(dc);
         else if (style == CatStyle.JapaneseBobtail) BobtailArt.DrawPortrait(dc);
         else DrawHead(dc, style == CatStyle.Ginger, 0, 0, 0);
@@ -269,7 +275,12 @@ public static partial class CatArt
             case CatStyle.JapaneseBobtail:
                 return BobtailArt.ContainsHead(pointer,time,gazeX,gazeY,leftPaw);
             default:
-                return Math.Pow((pointer.X - 212) / 63, 2) + Math.Pow((pointer.Y - 85) / 53, 2) < 1;
+                if (DogArt.IsDog(style)) return DogArt.For(style).ContainsHead(pointer,time,gazeX,gazeY,leftPaw);
+                double lean = Smooth((157 - leftPaw.X) / 50);
+                double breath = Math.Sin(time * 1.7) * 0.72;
+                double cx = 212 - 45 * lean + Limit(gazeX, -1, 1) * 3.2;
+                double cy = 85 + breath + Limit(gazeY, -1, 1) * 2.0 + lean * 1.2;
+                return Math.Pow((pointer.X - cx) / 63, 2) + Math.Pow((pointer.Y - cy) / 53, 2) < 1;
         }
     }
 

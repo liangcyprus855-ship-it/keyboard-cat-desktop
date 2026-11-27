@@ -1,22 +1,32 @@
 # 键盘小黑猫
 
-**[打开体验入口](https://keyboard-cat.app.workbuddy.host/?sharecode=6OHA4TQODE&shareId=8b833b2c65444fb4953ce4940ffc3a2e)** · [下载 Windows 和 macOS 安装包](https://github.com/liangcyprus855-ship-it/keyboard-cat-desktop/releases/latest)
+**[官网主页与在线引导](https://liangcyprus855-ship-it.github.io/keyboard-cat-desktop/)** · **[WorkBuddy 体验入口](https://keyboard-cat.app.workbuddy.host/?sharecode=6OHA4TQODE&shareId=8b833b2c65444fb4953ce4940ffc3a2e)** · **[下载最新版安装包 (GitHub Releases)](https://github.com/liangcyprus855-ship-it/keyboard-cat-desktop/releases/latest)**
 
-右键桌宠，在「角色样式」里可选四只猫和五位同事。五位人物都能跟随键鼠操作。鼠标移到头部，人物立即切换为点赞姿势。单击头部，人物立即托腮，保持约 1.5 秒。
+一只桌面常驻的互动小宠物，兼容 **Windows（Win7 SP1 / Win10 / Win11）** 与 **macOS 11+（Apple Silicon + Intel 通用）**。打字、点击鼠标或滚动滚轮时会在桌面角落同步动作，兼顾日常摸鱼陪伴与职场防社死体验。
 
-在同一菜单里选「使用苹果键鼠套装」，即可换上银色薄款妙控键盘和白色妙控鼠标。键盘和鼠标也可以分别选择，和其他款式混搭。
+## 核心特性（v1.13.2）
 
-在同一菜单里拖动「小猫大小」或「角色大小」，即可在 1% 到 200% 之间缩放。也可以从 Windows 系统托盘或 Mac 菜单栏打开设置。
+- **18 位角色任意切换**：
+  - **4 只小猫**：经典黑猫、奶油橘猫、日本短尾三花、长毛虎斑
+  - **10 位职场同事**：西装、发卡、红结、发带、圆镜、耳机、贝雷帽、棒球帽、组长、柴犬同事（支持头顶悬停点赞 / 点击托腮互动）
+  - **4 只萌犬**：腊肠犬、柯基犬、黑柴犬、比熊犬
+- **外观与桌搭面板**：可视化预览与一键切换 **18 位角色**、**5 套键盘**、**5 款鼠标**，以及 **4 款桌角小物件**（热咖啡、冰美式、搬砖中、勿扰牌）。
+- **三步交互式新手引导**：首次启动打开三步实时试用引导页，支持当场敲键试玩、挑首发搭子及快捷键速查，后续可在右键菜单 **「新手使用引导…」** 随时重温。
+- **高级精致菜单栏**：角色名片卡片、今日击键与暴走实时计数、`75%–150%` 预设滑轨与右对齐快捷键徽章。
+- **职场防社死与专注助手**：
+  - **一键老板键**：`Ctrl + Alt + H`（macOS：`Control + Option + H`）快速隐藏/呼出。
+  - **穿透临时抓取**：开启鼠标穿透后，按住 `Alt`（macOS：`Option ⌥`）即可临时拖动或右键打开菜单。
+  - **键帽隐私打码 (`••`)**：保留击键反馈与动画，隐藏具体按键字符。
+  - **全屏自动隐身**（Windows）与 **45 分钟喝水提醒气泡**，并支持 **高能解压 / 柔和不晃眼** 动效切换。
+- **自动更新与自启动**：内置开机自启动，以及通过 GitHub Releases（SHA-256 校验）一键检查更新。
 
-Windows 安装包兼容 Windows 7 SP1 的 32 位和 64 位版本。Win7 需要 .NET Framework 4.8；安装器发现缺少运行时时会给出下载入口。[微软 .NET Framework 4.8 运行时](https://dotnet.microsoft.com/zh-cn/download/dotnet-framework/net48)
+## 从源码构建与测试
 
-## 从源码构建
+修改共享引擎 `core/` 后请先运行 `core\Sync-Core.ps1` 同步生成 `windows\app\KeycatCore.g.cs`：
 
-请在仓库根目录运行对应命令。
+| 平台 | 环境要求 | 构建命令 | 测试命令 |
+| --- | --- | --- | --- |
+| Windows 7 SP1 / 10 / 11 | .NET Framework 4.8 与 NSIS 3 | `powershell -ExecutionPolicy Bypass -File .\windows\build.ps1` | `powershell -ExecutionPolicy Bypass -File .\windows\tests\run.ps1` |
+| macOS 11+ | Xcode Command Line Tools | `bash macos/build.sh` | `bash macos/tests/scale.sh` |
 
-| 平台 | 准备 | 构建命令 |
-| --- | --- | --- |
-| Windows 10 / 11 | .NET Framework 4.8 和 NSIS 3 | `powershell -File .\windows\build.ps1` |
-| macOS | Xcode 命令行工具 | `bash macos/build.sh` |
-
-[Windows 源码](windows/) · [macOS 源码](macos/) · [美术资源导出工具](art-tools/) · [MIT 许可证](LICENSE)
+[共享核心](core/) · [Windows 源码](windows/) · [macOS 源码](macos/) · [美术资源导出工具](art-tools/) · [MIT 许可证](LICENSE)

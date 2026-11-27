@@ -3,9 +3,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Win32;
 
 static class SetupTasks
 {
+    const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    const string RunValueName = "KeycatDesktop";
     delegate bool EnumWindow(IntPtr hwnd, IntPtr data);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindow callback, IntPtr data);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
@@ -71,11 +74,26 @@ static class SetupTasks
         string staging=Path.Combine(dir,Guid.NewGuid().ToString("N")+".tmp");
         try
         {
-            File.WriteAllText(staging,"<cat catStyle=\"PhotoTabby\" keyboard=\"Round\" mouse=\"Trackball\" />",new UTF8Encoding(false));
+            File.WriteAllText(staging,"<cat catStyle=\"Black\" keyboard=\"apple\" mouse=\"apple\" />",new UTF8Encoding(false));
             try { File.Move(staging,preferences); }
             catch(IOException){if(!File.Exists(preferences))throw;}
         }
         finally {if(File.Exists(staging))File.Delete(staging);}
+        return 0;
+    }
+    static int CleanAutoStart(string target)
+    {
+        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKeyPath, true))
+        {
+            if (key == null) return 0;
+            string raw = key.GetValue(RunValueName) as string;
+            if (String.IsNullOrWhiteSpace(raw)) return 0;
+            string trimmed = raw.Trim();
+            string path = trimmed[0] == '"'
+                ? trimmed.Substring(1, Math.Max(0, trimmed.IndexOf('"', 1) - 1))
+                : trimmed;
+            if (SamePath(path, target)) key.DeleteValue(RunValueName, false);
+        }
         return 0;
     }
     [STAThread] static int Main(string[] args)
@@ -84,6 +102,7 @@ static class SetupTasks
         {
             if(args.Length==2 && args[0]=="first-run")return FirstRun(args[1]);
             if(args.Length==2 && args[0]=="close")return CloseInstalled(args[1]);
+            if(args.Length==2 && args[0]=="clean-autostart")return CleanAutoStart(args[1]);
             if(args.Length==3 && (args[0]=="create-link" || args[0]=="remove-link"))return Link(args[0],args[1],args[2]);
             return 3;
         }
