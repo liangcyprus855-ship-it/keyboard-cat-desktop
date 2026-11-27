@@ -432,6 +432,10 @@ int main(int argc,const char *argv[]) {
                                  @"people":@100, @"people-restored":@100, @"apple":@100, @"apple-restored":@100};
         Check(expected[scenario]!=nil,@"unknown test scenario");
         if (fixtures[scenario]) [defaults removeObjectForKey:@"origin"];
+        if ([scenario isEqual:@"fresh"] || [scenario isEqual:@"apple"]) {
+            for (NSString *k in @[@"cat",@"keyboard",@"mouse",@"deskProp",@"fxLevel",@"labels",@"privacyMode",@"breakReminder",@"guideDone"])
+                [defaults removeObjectForKey:k];
+        }
         if (fixtures[scenario]==NSNull.null) [defaults removeObjectForKey:@"size"];
         else if (fixtures[scenario]) [defaults setObject:fixtures[scenario] forKey:@"size"];
 
