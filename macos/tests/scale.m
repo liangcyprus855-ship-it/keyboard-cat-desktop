@@ -14,6 +14,7 @@
 - (void)tick:(NSTimer *)timer {}
 - (BOOL)shouldScheduleStartupUpdateCheck { return NO; }
 - (BOOL)shouldScheduleStartupGuide { return NO; }
+- (BOOL)shouldScheduleFrameLoop { return NO; }
 @end
 
 @interface DismissalProbeMenu : NSMenu
@@ -463,6 +464,25 @@ int main(int argc,const char *argv[]) {
             Check(freshPet.fxLevel==KC_FX_QUIET && freshPet.todayKeyCount>0,@"fxLevel and todayKeyCount track cleanly");
             freshPet.fxLevel=KC_FX_VIBRANT;
             [freshPet dismissBreak];
+            [freshPet clearInput];
+            freshPet.catStyle=0;
+            double tailT=Now();
+            [freshPet advance:tailT];
+            NSData *tailA=Frame(freshPet);
+            [freshPet advance:tailT+0.04];
+            NSData *tailB=Frame(freshPet);
+            [freshPet advance:tailT+0.08];
+            NSData *tailC=Frame(freshPet);
+            Check(![tailA isEqual:tailB] || ![tailB isEqual:tailC],@"continuous high-FPS cat tail animates smoothly within 40ms steps");
+            freshPet.catStyle=14;
+            [freshPet advance:tailT+0.12];
+            NSData *dogA=Frame(freshPet);
+            [freshPet advance:tailT+0.16];
+            NSData *dogB=Frame(freshPet);
+            [freshPet advance:tailT+0.20];
+            NSData *dogC=Frame(freshPet);
+            Check(![dogA isEqual:dogB] || ![dogB isEqual:dogC],@"continuous high-FPS dog tail animates smoothly within 40ms steps");
+            freshPet.catStyle=0;
             [freshPet clearInput];
             [controller openGuideAction:nil];
             NSPanel *gp=[controller valueForKey:@"guidePanel"];

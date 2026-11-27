@@ -32,7 +32,7 @@ for arch in arm64 x86_64; do
         -Werror=unguarded-availability-new -Werror=implicit-function-declaration \
         -I"$root/../core" "$root/app/"*.m "$root/../core/keycat_core.c" \
         -framework Cocoa -framework ApplicationServices \
-        -framework CoreGraphics -o "$stage/$arch"
+        -framework CoreGraphics -framework CoreVideo -o "$stage/$arch"
 done
 xcrun lipo -create "$stage/arm64" "$stage/x86_64" -output "$binary"
 xcrun lipo "$binary" -verify_arch arm64 x86_64

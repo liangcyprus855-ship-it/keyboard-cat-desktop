@@ -58,12 +58,14 @@ internal static class CatVfx
             g.BeginFigure(startOuter, false, false);
             g.QuadraticBezierTo(ctrlOuter, endOuter, true, false);
         }
+        outerArc.Freeze();
         var innerArc = new StreamGeometry();
         using (StreamGeometryContext g = innerArc.Open())
         {
             g.BeginFigure(startInner, false, false);
             g.QuadraticBezierTo(ctrlInner, endInner, true, false);
         }
+        innerArc.Freeze();
 
         dc.PushOpacity(alpha * 0.88);
         dc.DrawGeometry(null, AuraHalo, outerArc);
@@ -110,6 +112,7 @@ internal static class CatVfx
                 g.LineTo(rightPt, true, false);
             }
         }
+        sparks.Freeze();
         dc.DrawGeometry(fill, SparkEdge, sparks);
         dc.Pop();
     }
@@ -171,6 +174,7 @@ internal static class CatVfx
             g.LineTo(new Point(center.X - r, center.Y), true, false);
             g.LineTo(new Point(center.X - inner, center.Y - inner), true, false);
         }
+        star.Freeze();
         dc.DrawGeometry(StarFill, StarEdge, star);
     }
 

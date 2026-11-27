@@ -28,7 +28,7 @@ xcrun --sdk macosx clang -mmacosx-version-min=11.0 -fobjc-arc -fblocks \
     -I"$root/../core" \
     "$root/tests/scale.m" "$root/app/MacKeys.m" "$root/app/PetView.m" \
     "$root/app/AutoStart.m" "$root/app/Updater.m" "$root/../core/keycat_core.c" \
-    -framework Cocoa -framework ApplicationServices -framework CoreGraphics -o "$binary"
+    -framework Cocoa -framework ApplicationServices -framework CoreGraphics -framework CoreVideo -o "$binary"
 codesign --force --sign - "$app"
 for scenario in fresh legacy restored low high invalid nan office office-restored people people-restored apple apple-restored; do
     KEYCAT_NO_AUTO_UPDATE=1 "$binary" "$scenario"

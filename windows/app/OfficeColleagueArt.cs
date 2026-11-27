@@ -255,6 +255,7 @@ internal sealed class OfficeColleagueArt
             g.BezierTo(WpfPt(arm.c4a),WpfPt(arm.c4b),WpfPt(arm.shoulderInner),true,true);
             g.BezierTo(WpfPt(arm.c5a),WpfPt(arm.c5b),WpfPt(arm.sleeveStart),true,true);
         }
+        sleeve.Freeze();
         dc.DrawGeometry(Suit,null,sleeve);
         dc.DrawLine(Crease,WpfPt(arm.creaseStart),WpfPt(arm.creaseEnd));
         var cuff=new StreamGeometry();
@@ -265,6 +266,7 @@ internal sealed class OfficeColleagueArt
             g.LineTo(WpfPt(arm.cuff2),true,true);
             g.LineTo(WpfPt(arm.cuff3),true,true);
         }
+        cuff.Freeze();
         dc.DrawGeometry(Shirt,null,cuff);
         dc.DrawLine(SuitEdge,WpfPt(arm.edgeStart),WpfPt(arm.edgeEnd));
         DrawHand(dc, arm);

@@ -736,7 +736,20 @@ static CGAffineTransform KCDogBodyTransform(KCPoint leftPaw,KCPoint rightPaw) {
     if(dogInfo){
         CGAffineTransform dogBodyTx=KCDogBodyTransform(_state.left,_state.right);
         CGContextSaveGState(ctx);CGContextConcatCTM(ctx,dogBodyTx);
-        [self drawSprite:[NSString stringWithFormat:@"tail-%ld-%ld",(long)_state.catStyle,(long)phase] alpha:1];
+        NSArray *tailPivotXY=dogInfo[@"tailPivot"];
+        NSNumber *wagDegNum=dogInfo[@"wagDeg"];
+        if(tailPivotXY.count==2 && wagDegNum){
+            CGFloat px=[tailPivotXY[0] doubleValue], py=[tailPivotXY[1] doubleValue];
+            double rad=sin(_state.time*tailSpeed)*[wagDegNum doubleValue]*M_PI/180.0;
+            CGContextSaveGState(ctx);
+            CGContextTranslateCTM(ctx,px,py);
+            CGContextRotateCTM(ctx,rad);
+            CGContextTranslateCTM(ctx,-px,-py);
+            [self drawSprite:[NSString stringWithFormat:@"tail-%ld-0",(long)_state.catStyle] alpha:1];
+            CGContextRestoreGState(ctx);
+        }else{
+            [self drawSprite:[NSString stringWithFormat:@"tail-%ld-%ld",(long)_state.catStyle,(long)phase] alpha:1];
+        }
         [self drawSprite:[NSString stringWithFormat:@"body-%ld",(long)_state.catStyle] alpha:1];
         CGContextRestoreGState(ctx);
         [self drawDogArm:ctx left:NO paw:NSMakePoint(_state.right.x,_state.right.y) bodyTx:dogBodyTx];
@@ -745,7 +758,19 @@ static CGAffineTransform KCDogBodyTransform(KCPoint leftPaw,KCPoint rightPaw) {
         [self drawSprite:[NSString stringWithFormat:@"dog-ruff-%ld",(long)_state.catStyle] alpha:1];
         CGContextRestoreGState(ctx);
     }else{
-        [self drawSprite:[NSString stringWithFormat:@"tail-%ld-%ld",(long)_state.catStyle,(long)phase] alpha:1];
+        if(_state.catStyle<2){
+            KCDrawCatTail(ctx,_state.catStyle,_state.time);
+        }else{
+            BOOL tabby=_state.catStyle==3;
+            CGFloat px=tabby?187.0:249.0, py=tabby?184.0:207.0;
+            double rad=sin(_state.time*1.8)*(tabby?2.1:3.0)*M_PI/180.0;
+            CGContextSaveGState(ctx);
+            CGContextTranslateCTM(ctx,px,py);
+            CGContextRotateCTM(ctx,rad);
+            CGContextTranslateCTM(ctx,-px,-py);
+            [self drawSprite:[NSString stringWithFormat:@"tail-%ld-0",(long)_state.catStyle] alpha:1];
+            CGContextRestoreGState(ctx);
+        }
         double lean=kc_cat_lean(&_state),shear=(_state.catStyle<2?.282:.285)*lean;
         CGAffineTransform body=CGAffineTransformMake(1,0,shear,1,-233*shear,0);
         CGContextSaveGState(ctx);CGContextConcatCTM(ctx,body);

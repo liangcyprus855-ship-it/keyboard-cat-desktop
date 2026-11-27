@@ -15,7 +15,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("键盘小黑猫")]
 [assembly: AssemblyDescription("会跟着键盘和鼠标一起动的小黑猫桌宠")]
-[assembly: AssemblyVersion("1.13.2.0")]
+[assembly: AssemblyVersion("1.13.3.0")]
 internal static class Program
 {
     internal static void SingleInstanceNames(string desktopName, out string mutexName, out string showEventName)
@@ -66,7 +66,7 @@ internal sealed class PetWindow : Window
     private readonly Preferences settings = Preferences.Load();
     private readonly CatScene cat = new CatScene();
     private readonly Canvas stage = new Canvas();
-    private readonly DispatcherTimer timer = new DispatcherTimer(DispatcherPriority.Render);
+    private readonly DispatcherTimer watchdogTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private readonly Forms.ContextMenuStrip menu = new Forms.ContextMenuStrip();
     private readonly StyleMenu styleMenu = new StyleMenu();
@@ -75,9 +75,10 @@ internal sealed class PetWindow : Window
     private DispatcherTimer startupUpdateTimer;
     private IntPtr hwnd, inputBuffer;
     private Drawing.Rectangle cursorMonitor;
-    private bool listening, menuOpen, suppressNextPetClick;
+    private bool listening, menuOpen, suppressNextPetClick, renderSubscribed;
     private bool userHidden, fullscreenHidden, appliedClickThrough;
-    private double lastFsCheck = -10, lastStatsSave = 0;
+    private double lastFsCheck = -10, lastStatsSync = -10, lastStatsSave = 0;
+    private TimeSpan lastRenderTime = TimeSpan.MinValue;
     private WardrobeWindow wardrobe;
     private GuideWindow guide;
     private int checkingUpdates;
@@ -140,8 +141,12 @@ internal sealed class PetWindow : Window
             menu.Show(Forms.Cursor.Position); e.Handled = true;
         };
         Cursor = Cursors.Hand;
-        timer.Interval = TimeSpan.FromMilliseconds(1000.0 / 40);
-        timer.Tick += delegate { Tick(); };
+        watchdogTimer.Tick += delegate
+        {
+            if (IsVisible) UpdateFrameLoop();
+            else Tick();
+        };
+        IsVisibleChanged += delegate { UpdateFrameLoop(); };
         Closed += delegate { CleanUp(); };
     }
 
@@ -173,7 +178,7 @@ internal sealed class PetWindow : Window
             if (!InView()) DockToCorner();
         }
         else DockToCorner();
-        timer.Start();
+        UpdateFrameLoop();
         ScheduleStartupUpdateCheck();
         ScheduleStartupGuide();
     }
@@ -455,10 +460,50 @@ internal sealed class PetWindow : Window
         Canvas.SetLeft(cat, -KeycatCore.KC_SCENE_OFFSET_X * s); Canvas.SetTop(cat, -KeycatCore.KC_SCENE_OFFSET_Y * s);
     }
 
+    private void UpdateFrameLoop()
+    {
+        bool active = IsVisible && hwnd != IntPtr.Zero;
+        if (active && !renderSubscribed)
+        {
+            lastRenderTime = TimeSpan.MinValue;
+            CompositionTarget.Rendering += OnRendering;
+            renderSubscribed = true;
+        }
+        else if (!active && renderSubscribed)
+        {
+            CompositionTarget.Rendering -= OnRendering;
+            renderSubscribed = false;
+        }
+        bool needWatchdog = !IsVisible && hwnd != IntPtr.Zero && !userHidden && settings.AutoHideFullscreen;
+        if (needWatchdog)
+        {
+            if (!watchdogTimer.IsEnabled) watchdogTimer.Start();
+        }
+        else if (watchdogTimer.IsEnabled)
+        {
+            watchdogTimer.Stop();
+        }
+    }
+
+    private void OnRendering(object sender, EventArgs e)
+    {
+        var args = e as RenderingEventArgs;
+        if (args != null)
+        {
+            if (args.RenderingTime == lastRenderTime) return;
+            lastRenderTime = args.RenderingTime;
+        }
+        Tick();
+    }
+
     internal void Tick(Func<WindowsInput.ScreenPoint?> cursorSampler = null)
     {
         double now = clock.Elapsed.TotalSeconds;
-        SyncStatsToSettings();
+        if (now - lastStatsSync >= 1.0)
+        {
+            lastStatsSync = now;
+            SyncStatsToSettings();
+        }
         if (now - lastStatsSave >= 30.0)
         {
             lastStatsSave = now;
@@ -689,7 +734,7 @@ internal sealed class PetWindow : Window
         if (!IsVisible) Show();
         if (!InView()) DockToCorner();
         cat.InvalidateVisual();
-        timer.Start();
+        UpdateFrameLoop();
     }
     private void Save()
     {
@@ -1008,7 +1053,8 @@ internal sealed class PetWindow : Window
         if (wardrobe != null) { try { wardrobe.Close(); } catch { } wardrobe = null; }
         if (guide != null) { try { guide.Close(); } catch { } guide = null; }
         if (startupUpdateTimer != null) { startupUpdateTimer.Stop(); startupUpdateTimer = null; }
-        timer.Stop(); Save();
+        if (renderSubscribed) { CompositionTarget.Rendering -= OnRendering; renderSubscribed = false; }
+        watchdogTimer.Stop(); Save();
         if (listening) { listening = false; try { WindowsInput.Listen(hwnd, false); } catch (Win32Exception) { } }
         if (source != null) source.RemoveHook(Messages);
         if (inputBuffer != IntPtr.Zero) { Marshal.FreeHGlobal(inputBuffer); inputBuffer = IntPtr.Zero; }

@@ -1,19 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Threading;
 
 internal sealed class GuideWindow : Window
 {
     private readonly PetWindow ownerPet;
     private readonly CatScene heroScene = new CatScene();
     private readonly CatScene step2Scene = new CatScene();
-    private readonly DispatcherTimer timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
-    private readonly double startTime = Environment.TickCount / 1000.0;
+    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private bool renderSubscribed;
+    private TimeSpan lastRenderTime = TimeSpan.MinValue;
 
     private int currentStep;
     private int tryKeyCount;
@@ -94,25 +95,11 @@ internal sealed class GuideWindow : Window
         SyncPreviewFromOwner();
         SetStep(0);
 
-        timer.Tick += delegate
-        {
-            if (!IsVisible) return;
-            double now = Now();
-            if (currentStep == 0 && simBurstUntil > now && now >= nextSimKey)
-            {
-                int[] keys = { 65, 83, 68, 70, 74, 75, 76, 32 };
-                TriggerPlaygroundStrike(keys[demoPulseIdx % keys.Length], now);
-                demoPulseIdx++;
-                nextSimKey = now + 0.055;
-            }
-            heroScene.Advance(now);
-            step2Scene.Advance(now);
-        };
         PreviewKeyDown += OnGuideKeyDown;
         IsVisibleChanged += delegate
         {
-            if (IsVisible) { SyncPreviewFromOwner(); timer.Start(); }
-            else timer.Stop();
+            if (IsVisible) SyncPreviewFromOwner();
+            UpdateRenderSubscription();
         };
         KeyDown += delegate(object sender, KeyEventArgs e)
         {
@@ -120,12 +107,53 @@ internal sealed class GuideWindow : Window
         };
         Closed += delegate
         {
-            timer.Stop();
+            SetRenderSubscription(false);
             if (ownerPet != null) ownerPet.MarkGuideCompleted();
         };
     }
 
-    private double Now() { return Environment.TickCount / 1000.0 - startTime + 10.0; }
+    private void UpdateRenderSubscription()
+    {
+        SetRenderSubscription(IsVisible);
+    }
+
+    private void SetRenderSubscription(bool enable)
+    {
+        if (enable && !renderSubscribed)
+        {
+            lastRenderTime = TimeSpan.MinValue;
+            CompositionTarget.Rendering += OnRendering;
+            renderSubscribed = true;
+        }
+        else if (!enable && renderSubscribed)
+        {
+            CompositionTarget.Rendering -= OnRendering;
+            renderSubscribed = false;
+        }
+    }
+
+    private void OnRendering(object sender, EventArgs e)
+    {
+        if (!IsVisible) return;
+        var args = e as RenderingEventArgs;
+        if (args != null)
+        {
+            if (args.RenderingTime == lastRenderTime) return;
+            lastRenderTime = args.RenderingTime;
+        }
+        double now = Now();
+        if (currentStep == 0 && simBurstUntil > now && now >= nextSimKey)
+        {
+            int[] keys = { 65, 83, 68, 70, 74, 75, 76, 32 };
+            TriggerPlaygroundStrike(keys[demoPulseIdx % keys.Length], now);
+            demoPulseIdx++;
+            nextSimKey = now + 0.055;
+        }
+        heroScene.Advance(now);
+        step2Scene.Advance(now);
+    }
+
+    private double Now() { return clock.Elapsed.TotalSeconds + 10.0; }
 
     internal int CurrentStepForTest { get { return currentStep; } }
     internal int PlaygroundStrikeCountForTest { get { return tryKeyCount; } }

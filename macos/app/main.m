@@ -1,11 +1,13 @@
 #import <Cocoa/Cocoa.h>
 #import <ApplicationServices/ApplicationServices.h>
+#import <CoreVideo/CoreVideo.h>
 #import "PetView.h"
 #import "MacKeys.h"
 #import "AutoStart.h"
 #import "Updater.h"
 #import "keycat_core.h"
 #import <math.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 
 @interface KCPetPanel : NSPanel
@@ -21,6 +23,7 @@
 - (void)cancelMenuForExternalPressAt:(NSTimeInterval)time;
 - (BOOL)shouldScheduleStartupUpdateCheck;
 - (BOOL)shouldScheduleStartupGuide;
+- (BOOL)shouldScheduleFrameLoop;
 @end
 
 static CGEventRef Monitor(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *context) {
@@ -87,6 +90,37 @@ static NSSize PetSize(double ratio) {
     return NSMakeSize(KC_WINDOW_WIDTH * ratio, KC_WINDOW_HEIGHT * ratio);
 }
 
+@interface KCController ()
+- (void)displayLinkTick;
+@end
+
+@interface KCDisplayLinkBox : NSObject {
+@public
+    __weak KCController *controller;
+    atomic_bool pending;
+}
+@end
+@implementation KCDisplayLinkBox
+@end
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+static CVReturn KCDisplayLinkCallback(CVDisplayLinkRef link, const CVTimeStamp *inNow,
+                                      const CVTimeStamp *inOutputTime, CVOptionFlags flagsIn,
+                                      CVOptionFlags *flagsOut, void *context) {
+    (void)link; (void)inNow; (void)inOutputTime; (void)flagsIn; (void)flagsOut;
+    KCDisplayLinkBox *box=(__bridge KCDisplayLinkBox *)context;
+    if(!box)return kCVReturnSuccess;
+    if(!atomic_exchange_explicit(&box->pending, true, memory_order_acq_rel)){
+        dispatch_async(dispatch_get_main_queue(), ^{
+            atomic_store_explicit(&box->pending, false, memory_order_release);
+            [box->controller displayLinkTick];
+        });
+    }
+    return kCVReturnSuccess;
+}
+#pragma clang diagnostic pop
+
 @implementation KCController {
     KCPetPanel *_window;
     KCPetView *_pet;
@@ -96,7 +130,11 @@ static NSSize PetSize(double ratio) {
     NSTimeInterval _menuOpenedAt;
     NSSlider *_sizeSlider;
     NSTextField *_sizeValue;
-    NSTimer *_timer;
+    NSTimer *_timer, *_watchdogTimer;
+    CVDisplayLinkRef _displayLink;
+    KCDisplayLinkBox *_displayLinkBox;
+    double _lastDisplayLinkAt;
+    BOOL _terminating;
     KCEventTap _keyboardTap, _mouseAndModifiersTap, _mediaTap;
     double _lastConsentCheck, _scale, _lastStatsSync;
     NSPoint _resizeAnchor;
@@ -157,6 +195,7 @@ static NSSize PetSize(double ratio) {
     const char *disabled=getenv("KEYCAT_SKIP_GUIDE");
     return !(disabled && strcmp(disabled,"1")==0);
 }
+- (BOOL)shouldScheduleFrameLoop { return YES; }
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
     NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;
     [defaults registerDefaults:@{@"cat":@(KC_DEFAULT_CAT),@"keyboard":@(KC_DEFAULT_KEYBOARD),
@@ -206,8 +245,10 @@ static NSSize PetSize(double ratio) {
     _window.delegate=self;[_window orderFrontRegardless];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(displayChanged:) name:NSApplicationDidChangeScreenParametersNotification object:nil];
     [self refreshTap];[self rebuildMenu];
-    _timer=[NSTimer timerWithTimeInterval:1./40. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
-    _timer.tolerance=.004;[[NSRunLoop mainRunLoop] addTimer:_timer forMode:NSRunLoopCommonModes];
+    if([self shouldScheduleFrameLoop]){
+        [self setupFrameLoop];
+        [self syncFrameLoop];
+    }
     if(!_pet.hasArt){
         NSAlert *alert=[NSAlert new];alert.messageText=@"桌宠图像资源缺失";
         alert.informativeText=@"请从安装包重新安装完整的“键盘小黑猫”应用。";[alert runModal];[NSApp terminate:nil];return;
@@ -251,11 +292,22 @@ static NSSize PetSize(double ratio) {
     [NSUserDefaults.standardUserDefaults setObject:NSStringFromPoint(_window.frame.origin) forKey:@"origin"];
 }
 - (void)windowDidMove:(NSNotification *)n {
+    if(n.object!=_window)return;
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(saveOrigin) object:nil];
     [self performSelector:@selector(saveOrigin) withObject:nil afterDelay:.25];
 }
+- (void)windowDidChangeScreen:(NSNotification *)n {
+    if(n.object==_window)[self updateDisplayLinkScreen];
+}
+- (void)windowWillClose:(NSNotification *)n {
+    if(n.object==_guidePanel && _guideKeyMonitor){
+        [NSEvent removeMonitor:_guideKeyMonitor];_guideKeyMonitor=nil;
+    }
+    dispatch_async(dispatch_get_main_queue(),^{ [self syncFrameLoop]; });
+}
 - (void)displayChanged:(NSNotification *)n {
     if(![self windowOnScreen]){[self dockToCorner];[self saveOrigin];}
+    [self updateDisplayLinkScreen];
 }
 - (void)disconnectTap {
     DisconnectTap(&_keyboardTap);
@@ -316,18 +368,102 @@ static NSSize PetSize(double ratio) {
         [_pet button:side down:(type==kCGEventLeftMouseDown||type==kCGEventRightMouseDown) at:t];
     }
 }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+- (void)setupFrameLoop {
+    _displayLinkBox=[KCDisplayLinkBox new];
+    _displayLinkBox->controller=self;
+    atomic_store_explicit(&_displayLinkBox->pending, false, memory_order_relaxed);
+    CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
+    if(!_displayLink)CVDisplayLinkCreateWithCGDisplay(CGMainDisplayID(), &_displayLink);
+    if(_displayLink){
+        CVDisplayLinkSetOutputCallback(_displayLink, KCDisplayLinkCallback, (__bridge void *)_displayLinkBox);
+        [self updateDisplayLinkScreen];
+    }
+    _watchdogTimer=[NSTimer timerWithTimeInterval:0.35 target:self selector:@selector(frameWatchdog:) userInfo:nil repeats:YES];
+    _watchdogTimer.tolerance=0.05;
+    [[NSRunLoop mainRunLoop] addTimer:_watchdogTimer forMode:NSRunLoopCommonModes];
+}
+- (void)updateDisplayLinkScreen {
+    if(!_displayLink)return;
+    NSNumber *screenID=_window.screen.deviceDescription[@"NSScreenNumber"];
+    if(screenID && screenID.unsignedIntValue)
+        CVDisplayLinkSetCurrentCGDisplay(_displayLink, (CGDirectDisplayID)screenID.unsignedIntValue);
+}
+- (void)startFallbackTimer {
+    if(_timer)return;
+    _timer=[NSTimer timerWithTimeInterval:1./60. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+    _timer.tolerance=.001;
+    [[NSRunLoop mainRunLoop] addTimer:_timer forMode:NSRunLoopCommonModes];
+}
+- (void)stopFallbackTimer {
+    [_timer invalidate];
+    _timer=nil;
+}
+- (void)syncFrameLoop {
+    BOOL needFrames=!_terminating && [self shouldScheduleFrameLoop] && (_window.visible || _wardrobePanel.visible || _guidePanel.visible);
+    if(!needFrames){
+        if(_displayLink && CVDisplayLinkIsRunning(_displayLink))CVDisplayLinkStop(_displayLink);
+        [self stopFallbackTimer];
+        return;
+    }
+    if(_displayLink){
+        if(!CVDisplayLinkIsRunning(_displayLink)){
+            _lastDisplayLinkAt=0;
+            CVDisplayLinkStart(_displayLink);
+            [self startFallbackTimer];
+        }
+    }else{
+        [self startFallbackTimer];
+    }
+}
+- (void)frameWatchdog:(NSTimer *)timer {
+    (void)timer;
+    if(_terminating)return;
+    BOOL needFrames=_window.visible || _wardrobePanel.visible || _guidePanel.visible;
+    if(!needFrames){[self syncFrameLoop];return;}
+    if(!_displayLink || !CVDisplayLinkIsRunning(_displayLink) || (_lastDisplayLinkAt>0 && Now()-_lastDisplayLinkAt>0.35))
+        [self startFallbackTimer];
+}
+- (void)stopDisplayLink {
+    _terminating=YES;
+    [_watchdogTimer invalidate];_watchdogTimer=nil;
+    [self stopFallbackTimer];
+    if(_displayLink){
+        if(CVDisplayLinkIsRunning(_displayLink))CVDisplayLinkStop(_displayLink);
+        CVDisplayLinkRelease(_displayLink);
+        _displayLink=NULL;
+    }
+    _displayLinkBox=nil;
+}
+#pragma clang diagnostic pop
+- (void)displayLinkTick {
+    if(_terminating)return;
+    _lastDisplayLinkAt=Now();
+    if(_timer)[self stopFallbackTimer];
+    [self tick:nil];
+}
 - (void)tick:(NSTimer *)timer {
-    if(!_window.visible)return;double t=Now();
-    if(t-_lastConsentCheck>3)[self refreshTap];
-    BOOL effectiveThrough=_through && !_menuOpen && !(NSEvent.modifierFlags & NSEventModifierFlagOption);
-    if(_window.ignoresMouseEvents!=effectiveThrough)_window.ignoresMouseEvents=effectiveThrough;
+    if(timer && _displayLink && _lastDisplayLinkAt>0 && Now()-_lastDisplayLinkAt<0.25){
+        [self stopFallbackTimer];
+        return;
+    }
+    BOOL petVisible=_window.visible, wardrobeVisible=_wardrobePanel.visible, guideVisible=_guidePanel.visible;
+    if(!petVisible && !wardrobeVisible && !guideVisible){[self syncFrameLoop];return;}
+    double t=Now();
+    BOOL effectiveThrough=_through;
+    if(petVisible){
+        if(t-_lastConsentCheck>3)[self refreshTap];
+        effectiveThrough=_through && !_menuOpen && !(NSEvent.modifierFlags & NSEventModifierFlagOption);
+        if(_window.ignoresMouseEvents!=effectiveThrough)_window.ignoresMouseEvents=effectiveThrough;
+    }
     if(t-_lastStatsSync>2.0){_lastStatsSync=t;[self ensureTodayStats];[self syncStatsToDefaults:NO];}
-    if(_wardrobePanel.visible){
+    if(wardrobeVisible){
         if(_wardrobePreview)[_wardrobePreview advance:t];
         if(_wardrobeStats)_wardrobeStats.stringValue=[NSString stringWithFormat:@"今日战绩：敲击 %lld 下 · 暴走 %ld 次",
                                                        _pet.todayKeyCount,(long)_pet.todayBurstCount];
     }
-    if(_guidePanel.visible){
+    if(guideVisible){
         if(_guideStep==0 && _guidePreview){
             if(_guideBurstUntil>t && t>=_nextGuideDemoAt){
                 const NSInteger demoKeys[]={65,83,68,70,74,75,76,32};
@@ -341,6 +477,7 @@ static NSSize PetSize(double ratio) {
         if(_guideStep==1 && _guideStep2Preview)[_guideStep2Preview advance:t];
         if(_guideStep==2)[self refreshGuidePermission];
     }
+    if(!petVisible)return;
     NSPoint p=NSEvent.mouseLocation;
     NSPoint windowPoint=[_window convertPointFromScreen:p];NSPoint local=[_pet convertPoint:windowPoint fromView:nil];
     local=NSMakePoint(KC_SCENE_OFFSET_X+KC_WINDOW_WIDTH*local.x/_pet.bounds.size.width,
@@ -662,6 +799,7 @@ static NSSize PetSize(double ratio) {
     _wardrobePanel.title=@"键盘小黑猫 · 外观与桌搭面板";
     _wardrobePanel.releasedWhenClosed=NO;
     _wardrobePanel.floatingPanel=YES;
+    _wardrobePanel.delegate=self;
     NSView *root=_wardrobePanel.contentView;
     _wardrobePreview=[[KCPetView alloc] initWithFrame:NSMakeRect(16,426,170,148)];
     [root addSubview:_wardrobePreview];
@@ -763,6 +901,7 @@ static NSSize PetSize(double ratio) {
     [_wardrobePanel center];
     [NSApp activateIgnoringOtherApps:YES];
     [_wardrobePanel makeKeyAndOrderFront:nil];
+    [self syncFrameLoop];
 }
 - (void)refreshGuidePermission {
     if(!_guidePanel || !_guidePermNote || !_guidePermBtn)return;
@@ -866,7 +1005,7 @@ static NSSize PetSize(double ratio) {
     _guidePanel=[[NSPanel alloc] initWithContentRect:NSMakeRect(0,0,636,566)
         styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];
     _guidePanel.title=@"键盘小黑猫 · 首次使用交互指南";
-    _guidePanel.releasedWhenClosed=NO;_guidePanel.floatingPanel=YES;
+    _guidePanel.releasedWhenClosed=NO;_guidePanel.floatingPanel=YES;_guidePanel.delegate=self;
     NSView *root=_guidePanel.contentView;
 
     NSTextField *eyebrow=[NSTextField labelWithString:[NSString stringWithFormat:@"KEYCAT STUDIO · v%s",KC_APP_VERSION]];
@@ -997,6 +1136,7 @@ static NSSize PetSize(double ratio) {
     [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"guideDone"];
     if(_guideKeyMonitor){[NSEvent removeMonitor:_guideKeyMonitor];_guideKeyMonitor=nil;}
     [_guidePanel close];
+    [self syncFrameLoop];
 }
 - (void)guideOpenWardrobeAction:(id)sender {
     [self guideCloseAction:sender];
@@ -1022,6 +1162,7 @@ static NSSize PetSize(double ratio) {
         }];
     }
     [_guidePanel center];[NSApp activateIgnoringOtherApps:YES];[_guidePanel makeKeyAndOrderFront:nil];
+    [self syncFrameLoop];
 }
 - (void)autoStartAction:(id)sender {
     BOOL next=![KCAutoStart isEnabled];
@@ -1109,18 +1250,18 @@ static NSSize PetSize(double ratio) {
     }];
 }
 - (void)showPet {
-    if(![self windowOnScreen])[self dockToCorner];[_window orderFrontRegardless];[self refreshTap];
+    if(![self windowOnScreen])[self dockToCorner];[_window orderFrontRegardless];[self refreshTap];[self syncFrameLoop];
 }
 - (void)cornerAction:(id)sender { [self dockToCorner];[self saveOrigin];[self showPet]; }
 - (void)toggleVisible:(id)sender {
-    if(_window.visible){[_window orderOut:nil];[_pet clearInput];[self disconnectTap];}else [self showPet];
+    if(_window.visible){[_window orderOut:nil];[_pet clearInput];[self disconnectTap];[self syncFrameLoop];}else [self showPet];
 }
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)flag { [self showPet];return NO; }
 - (void)quit:(id)sender { [NSApp terminate:nil]; }
 - (void)applicationWillTerminate:(NSNotification *)n {
     [self menuDidClose:_menu];
     if(_guideKeyMonitor){[NSEvent removeMonitor:_guideKeyMonitor];_guideKeyMonitor=nil;}
-    [_timer invalidate];[self saveOrigin];[self syncStatsToDefaults:YES];[self disconnectTap];
+    [self stopDisplayLink];[self saveOrigin];[self syncStatsToDefaults:YES];[self disconnectTap];
 }
 @end
 

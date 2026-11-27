@@ -12,7 +12,7 @@
 powershell -ExecutionPolicy Bypass -File .\windows\build.ps1
 ```
 
-生成的文件是 `windows/build/键盘小黑猫.exe` 和 `windows/build/键盘小黑猫-<版本>-Windows安装包.exe`（当前版本 `1.13.2`）。脚本会从 PATH 或 NSIS 的常规安装位置寻找 `makensis.exe`。需要自定义编译器位置或输出目录时可以使用下面的参数：
+生成的文件是 `windows/build/键盘小黑猫.exe` 和 `windows/build/键盘小黑猫-<版本>-Windows安装包.exe`（当前版本 `1.13.3`）。脚本会从 PATH 或 NSIS 的常规安装位置寻找 `makensis.exe`。需要自定义编译器位置或输出目录时可以使用下面的参数：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\windows\build.ps1 -Compiler '.\tools\NSIS\makensis.exe' -OutputDirectory '.\artifacts'

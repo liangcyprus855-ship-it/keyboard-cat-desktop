@@ -120,6 +120,8 @@ internal static class ExportArt
                     shoulderR=Position(dog.ShoulderRight),
                     restPawR=Position(dog.RestPawRight),
                     tailSpeed=dog.TailSpeed,
+                    tailPivot=Position(dog.TailPivotPoint),
+                    wagDeg=dog.TailWagDeg,
                     segsL=lMeta,
                     segsR=rMeta
                 });

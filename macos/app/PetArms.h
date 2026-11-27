@@ -80,9 +80,10 @@ static inline void KCArmStrokeColor(CGContextRef ctx,unsigned color,CGFloat alph
 }
 static CGGradientRef KCArmGradient(int index) {
     // These immutable swatches live as long as the main-thread WPF-equivalent scene.
-    static CGGradientRef palette[5];
-    static const unsigned colors[5][2]={
-        {0x1e1c1f,0x18171a},{0xefaa67,0xdf9354},{0xf6eddc,0xf6ecda},{0x9e876a,0xb69d7a},{0xf5efdd,0xece3d1}
+    static CGGradientRef palette[7];
+    static const unsigned colors[7][2]={
+        {0x1e1c1f,0x18171a},{0xefaa67,0xdf9354},{0xf6eddc,0xf6ecda},{0x9e876a,0xb69d7a},{0xf5efdd,0xece3d1},
+        {0x1f1d20,0x161518},{0xeaa15c,0xd58b4f}
     };
     if(!palette[index]){
         CGFloat rgba[8];for(int i=0;i<2;i++){
@@ -96,12 +97,47 @@ static CGGradientRef KCArmGradient(int index) {
 }
 static void KCArmPaintPath(CGContextRef ctx,CGPathRef p,int index) {
     CGRect b=CGPathGetPathBoundingBox(p);if(b.size.width<=0 || b.size.height<=0)return;
-    CGPoint a=index==0?CGPointMake(.2,0):index==1?CGPointMake(.22,0):CGPointMake(.3,.1);
-    CGPoint z=index==0?CGPointMake(.9,1):index==1?CGPointMake(.82,1):CGPointMake(.85,1);
+    CGPoint a=index==0?CGPointMake(.2,0):(index==1||index==6)?CGPointMake(.22,0):index==5?CGPointMake(0,0):CGPointMake(.3,.1);
+    CGPoint z=index==0?CGPointMake(.9,1):(index==1||index==6)?CGPointMake(.82,1):index==5?CGPointMake(1,.85):CGPointMake(.85,1);
     CGContextSaveGState(ctx);CGContextAddPath(ctx,p);CGContextClip(ctx);
     CGContextTranslateCTM(ctx,b.origin.x,b.origin.y);CGContextScaleCTM(ctx,b.size.width,b.size.height);
     CGContextDrawLinearGradient(ctx,KCArmGradient(index),a,z,kCGGradientDrawsBeforeStartLocation|kCGGradientDrawsAfterEndLocation);
     CGContextRestoreGState(ctx);
+}
+static void KCDrawGingerTailBand(CGContextRef ctx,CGFloat x,CGFloat y,CGFloat deg) {
+    CGContextSaveGState(ctx);CGContextTranslateCTM(ctx,x,y);CGContextRotateCTM(ctx,deg*M_PI/180.);
+    KCArmFillColor(ctx,0xc17039);
+    CGContextBeginPath(ctx);CGContextMoveToPoint(ctx,-3,-13);
+    CGContextAddQuadCurveToPoint(ctx,.7,-11,4,-13);CGContextAddQuadCurveToPoint(ctx,1,0,4,13);
+    CGContextAddQuadCurveToPoint(ctx,-.2,11,-3,13);CGContextAddQuadCurveToPoint(ctx,-4.4,0,-3,-13);
+    CGContextClosePath(ctx);CGContextFillPath(ctx);CGContextRestoreGState(ctx);
+}
+static void KCDrawCatTail(CGContextRef ctx,NSInteger cat,double t) {
+    double wave=sin(t*1.9), tip=sin(t*1.9-0.68);
+    CGMutablePathRef tail=CGPathCreateMutable();
+    CGPathMoveToPoint(tail,NULL,251,199);
+    CGPathAddCurveToPoint(tail,NULL,263,200,273,204,281,201+wave*1.3);
+    CGPathAddCurveToPoint(tail,NULL,290,198,292,186+wave*2.0,300,177+wave*2.5);
+    CGPathAddCurveToPoint(tail,NULL,307,169+tip*4.0,317,165+tip*5.0,325,166+tip*6.0);
+    CGPathAddCurveToPoint(tail,NULL,335,167+tip*6.0,334,181+tip*6.0,324,181+tip*6.0);
+    CGPathAddCurveToPoint(tail,NULL,311,180+tip*4.0,305,191,298,202+wave*2.0);
+    CGPathAddCurveToPoint(tail,NULL,289,217+wave,268,220,251,214);
+    CGPathCloseSubpath(tail);
+    KCArmPaintPath(ctx,tail,cat==1?6:5);
+    if(cat==1){
+        CGContextSaveGState(ctx);CGContextAddPath(ctx,tail);CGContextClip(ctx);
+        KCDrawGingerTailBand(ctx,275,208+wave*.7,-7);
+        KCDrawGingerTailBand(ctx,289.5,203+wave*1.7,-43+wave*3);
+        KCDrawGingerTailBand(ctx,304,183+wave*2.5,-48+tip*4);
+        CGContextSaveGState(ctx);CGContextTranslateCTM(ctx,320,174+tip*5);CGContextRotateCTM(ctx,(-13+tip*8)*M_PI/180.);
+        KCArmFillColor(ctx,0xffe6c0);
+        CGContextBeginPath(ctx);CGContextMoveToPoint(ctx,-3,-12);CGContextAddLineToPoint(ctx,22,-12);
+        CGContextAddLineToPoint(ctx,22,13);CGContextAddLineToPoint(ctx,-4,13);
+        CGContextAddQuadCurveToPoint(ctx,.4,4,-1,-1);CGContextAddQuadCurveToPoint(ctx,-4,-6,-3,-12);
+        CGContextClosePath(ctx);CGContextFillPath(ctx);CGContextRestoreGState(ctx);
+        CGContextRestoreGState(ctx);
+    }
+    CGPathRelease(tail);
 }
 static void KCGingerCuff(CGContextRef ctx,KCArmCurve c,CGPathRef limb) {
     CGFloat dx=c.paw.x-c.farControl.x,dy=c.paw.y-c.farControl.y,length=hypot(dx,dy);

@@ -1,17 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
-using System.Windows.Threading;
 
 internal sealed class WardrobeWindow : Window
 {
     private readonly PetWindow ownerPet;
     private readonly CatScene previewScene = new CatScene();
-    private readonly DispatcherTimer previewTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(40) };
+    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private bool renderSubscribed;
+    private TimeSpan lastRenderTime = TimeSpan.MinValue;
     private readonly Dictionary<CatStyle, Border> charCards = new Dictionary<CatStyle, Border>();
     private readonly Dictionary<KeyboardStyle, Button> kbButtons = new Dictionary<KeyboardStyle, Button>();
     private readonly Dictionary<MouseStyle, Button> mouseButtons = new Dictionary<MouseStyle, Button>();
@@ -28,7 +30,6 @@ internal sealed class WardrobeWindow : Window
     private readonly CheckBox topCheck = new CheckBox();
     private readonly CheckBox throughCheck = new CheckBox();
     private readonly CheckBox autoStartCheck = new CheckBox();
-    private readonly double startTime = Environment.TickCount / 1000.0;
     private bool syncing;
 
     private static Brush BgPage = FreezeBrush(0xF6, 0xF3, 0xEE);
@@ -75,19 +76,41 @@ internal sealed class WardrobeWindow : Window
         root.Children.Add(SectionLabel("动效手感和日常习惯"));
         root.Children.Add(BuildPreferencesCard());
 
-        previewTimer.Tick += delegate
-        {
-            if (IsVisible)
-                previewScene.Advance(Environment.TickCount / 1000.0 - startTime + 1.0);
-        };
         Activated += delegate { RefreshState(); };
         IsVisibleChanged += delegate
         {
-            if (IsVisible) { previewTimer.Start(); RefreshState(); }
-            else previewTimer.Stop();
+            SetRenderSubscription(IsVisible);
+            if (IsVisible) RefreshState();
         };
-        Closed += delegate { previewTimer.Stop(); };
+        Closed += delegate { SetRenderSubscription(false); };
         RefreshState();
+    }
+
+    private void SetRenderSubscription(bool enable)
+    {
+        if (enable && !renderSubscribed)
+        {
+            lastRenderTime = TimeSpan.MinValue;
+            CompositionTarget.Rendering += OnRendering;
+            renderSubscribed = true;
+        }
+        else if (!enable && renderSubscribed)
+        {
+            CompositionTarget.Rendering -= OnRendering;
+            renderSubscribed = false;
+        }
+    }
+
+    private void OnRendering(object sender, EventArgs e)
+    {
+        if (!IsVisible) return;
+        var args = e as RenderingEventArgs;
+        if (args != null)
+        {
+            if (args.RenderingTime == lastRenderTime) return;
+            lastRenderTime = args.RenderingTime;
+        }
+        previewScene.Advance(clock.Elapsed.TotalSeconds + 1.0);
     }
 
     private UIElement BuildHeroBanner()

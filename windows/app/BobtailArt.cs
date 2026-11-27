@@ -200,6 +200,7 @@ internal static class BobtailArt
             }
             for (int i=steps; i>=0; i--) path.LineTo(opposite[i],true,true);
         }
+        arm.Freeze();
         dc.DrawGeometry(Sleeve,null,arm);
         dc.DrawEllipse(Paw,null,paw,8.65,7.4);
         if (activity<.25)

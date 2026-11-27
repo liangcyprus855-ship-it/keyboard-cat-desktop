@@ -92,6 +92,7 @@ public static partial class CatArt
             g.BezierTo(new Point(311,180 + tip * 4),new Point(305,191),new Point(298,202 + wave * 2),true,true);
             g.BezierTo(new Point(289,217 + wave),new Point(268,220),new Point(251,214),true,true);
         }
+        tail.Freeze();
         dc.DrawGeometry(ginger ? Ginger.TailFur : Fur, null, tail);
         if (ginger) Ginger.DrawTailBands(dc, tail, wave, tip);
     }
@@ -133,6 +134,7 @@ public static partial class CatArt
             }
             for (int i=count; i>=0; --i) g.LineTo(secondSide[i],true,true);
         }
+        limb.Freeze();
         dc.DrawGeometry(ginger ? Ginger.LegFur : Foreleg, null, limb);
         if (ginger)
         {
@@ -150,6 +152,7 @@ public static partial class CatArt
                 g.BeginFigure(new Point(paw.X+side*7.5,paw.Y+0.7),false,false);
                 g.BezierTo(new Point(paw.X+side*7.1,paw.Y+6.2),new Point(paw.X+side*2.7,paw.Y+8.2),new Point(paw.X-side*2.3,paw.Y+7.7),true,true);
             }
+            rim.Freeze();
             dc.DrawGeometry(null,PawLight,rim);
             dc.Pop();
         }
@@ -171,11 +174,13 @@ public static partial class CatArt
                 g.BeginFigure(new Point(x-width*0.86,y),false,false);
                 g.QuadraticBezierTo(new Point(x,y+3.0),new Point(x+width*0.86,y-0.2),true,true);
             }
+            slit.Freeze();
             dc.DrawGeometry(null,ginger ? Ginger.Lid : Lid,slit);
         }
         else
         {
             EllipseGeometry iris = new EllipseGeometry(new Point(x,y),width,height);
+            iris.Freeze();
             dc.DrawGeometry(ginger ? Ginger.Iris : Iris,ginger ? Ginger.EyeEdge : null,iris);
             dc.PushClip(iris);
             if (ginger) Ginger.DrawPupil(dc, x, y, gx, gy);
@@ -198,6 +203,7 @@ public static partial class CatArt
                 g.BeginFigure(start,false,false);
                 g.QuadraticBezierTo(new Point((start.X+end.X)/2,start.Y-1.1+k*0.65),end,true,true);
             }
+            whisker.Freeze();
             dc.DrawGeometry(null,ginger ? Ginger.Whisker : Whisker,whisker);
             dc.DrawLine(ginger ? Ginger.WhiskerRoot : RootPen,start,new Point(start.X+side*(6.2-k*0.9),start.Y-0.45+k*0.65));
         }

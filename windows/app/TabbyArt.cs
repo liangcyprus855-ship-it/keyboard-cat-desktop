@@ -315,6 +315,7 @@ internal static class TabbyArt
                 }
                 for (int i=steps;i>=0;i--) path.LineTo(opposite[i],true,true);
             }
+            arm.Freeze();
             return arm;
         }
 
@@ -333,6 +334,7 @@ internal static class TabbyArt
                 path.BezierTo(StripePoint(t+.040,.56),StripePoint(t+.064,.03),StripePoint(t+breadth*.57,-.38),true,false);
                 path.QuadraticBezierTo(StripePoint(t+.018,-.83),StripePoint(t+.020,-1.30),true,false);
             }
+            stripe.Freeze();
             dc.DrawGeometry(color,null,stripe);
         }
     }

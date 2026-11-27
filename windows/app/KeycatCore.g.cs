@@ -187,8 +187,8 @@ internal struct KCImpactLayout
 
 internal static partial class KeycatCore
 {
-    public const string KC_APP_VERSION = "1.13.2";
-    public const string KC_APP_BUILD = "1132";
+    public const string KC_APP_VERSION = "1.13.3";
+    public const string KC_APP_BUILD = "1133";
     public const string KC_GITHUB_REPO = "liangcyprus855-ship-it/keyboard-cat-desktop";
     public const int KC_DEFAULT_CAT = 0;
     public const int KC_CAT_STYLE_COUNT = 18;

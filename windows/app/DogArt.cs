@@ -62,6 +62,8 @@ internal sealed class DogArt
     public Point ShoulderRight { get { return ArmR.Shoulder; } }
     public Point RestPawRight { get { return ArmR.RestPaw; } }
     public double TailSpeed { get { return WagSpeed; } }
+    public Point TailPivotPoint { get { return TailPivot; } }
+    public double TailWagDeg { get { return WagDeg; } }
 
     public ArmSegment[] GetSegments(bool left)
     {
@@ -285,6 +287,7 @@ internal sealed class DogArt
         {
             Transform = new RotateTransform(eye.Deg)
         };
+        clip.Freeze();
         dc.PushTransform(new TranslateTransform(eye.X, eye.Y));
         dc.PushClip(clip);
 
@@ -297,6 +300,7 @@ internal sealed class DogArt
                 g.BeginFigure(new Point(-rx * 0.78, ry * 0.05), false, false);
                 g.QuadraticBezierTo(new Point(0, ry * 0.36), new Point(rx * 0.78, ry * 0.03), true, false);
             }
+            closed.Freeze();
             dc.DrawGeometry(null, LidLine, closed);
         }
         else
@@ -317,6 +321,7 @@ internal sealed class DogArt
                     g.LineTo(new Point(span, lidBottom), true, false);
                     g.QuadraticBezierTo(new Point(0, lidBottom + ry * 0.22), new Point(-span, lidBottom), true, false);
                 }
+                lid.Freeze();
                 dc.DrawGeometry(LidBrush, null, lid);
                 var rim = new StreamGeometry();
                 using (StreamGeometryContext g = rim.Open())
@@ -324,6 +329,7 @@ internal sealed class DogArt
                     g.BeginFigure(new Point(-rx * 0.90, lidBottom), false, false);
                     g.QuadraticBezierTo(new Point(0, lidBottom + ry * 0.22), new Point(rx * 0.90, lidBottom), true, false);
                 }
+                rim.Freeze();
                 dc.DrawGeometry(null, LidLine, rim);
             }
         }

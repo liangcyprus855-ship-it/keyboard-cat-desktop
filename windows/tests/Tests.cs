@@ -473,6 +473,20 @@ internal static class Tests
         scaleCtrl.Value = 750;
         Assert(scaleCtrl.PercentageText == "75%", "SleekScaleControl updates value cleanly");
         scaleCtrl.Dispose();
+
+        // Verify fine 120 Hz timesteps smoothly advance paw and motion state without dead zones.
+        var smoothScene = new CatScene();
+        smoothScene.Strike(65, 50.0);
+        Point prevLeft = smoothScene.LeftHandPoint;
+        int movedSteps = 0;
+        for (int frame = 1; frame <= 10; frame++)
+        {
+            smoothScene.Advance(50.0 + frame / 120.0);
+            Point nextLeft = smoothScene.LeftHandPoint;
+            if ((nextLeft - prevLeft).Length > 0.01) movedSteps++;
+            prevLeft = nextLeft;
+        }
+        Assert(movedSteps >= 8, "120 Hz steps smoothly interpolate paw trajectory (" + movedSteps + "/10)");
     }
 
     [STAThread]

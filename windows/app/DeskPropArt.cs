@@ -72,6 +72,7 @@ internal static class DeskPropArt
                 g.BeginFigure(new Point(cx + 2.2, cy - 9.5), false, false);
                 g.QuadraticBezierTo(new Point(cx + 3.8 + s1, cy - 13.5), new Point(cx + 1.5 - s1 * 0.6, cy - 18.0), true, false);
             }
+            steam.Freeze();
             dc.DrawGeometry(null, SteamPen, steam);
         }
         else if (prop == KeycatCore.KC_PROP_ICED)
@@ -85,6 +86,7 @@ internal static class DeskPropArt
                 g.LineTo(new Point(cx + 5.0, cy + 11.0), true, false);
                 g.LineTo(new Point(cx - 5.0, cy + 11.0), true, false);
             }
+            cup.Freeze();
             dc.DrawGeometry(IcedCup, IcedEdge, cup);
             var liquid = new StreamGeometry();
             using (var g = liquid.Open())
@@ -94,6 +96,7 @@ internal static class DeskPropArt
                 g.LineTo(new Point(cx + 4.4, cy + 10.0), true, false);
                 g.LineTo(new Point(cx - 4.4, cy + 10.0), true, false);
             }
+            liquid.Freeze();
             dc.DrawGeometry(IcedCoffee, null, liquid);
             dc.DrawRoundedRectangle(IceCube, IcedEdge, new Rect(cx - 3.8, cy - 4.5, 4.2, 4.2), 0.8, 0.8);
             dc.DrawRoundedRectangle(IceCube, IcedEdge, new Rect(cx + 0.6, cy - 3.6, 3.8, 3.8), 0.8, 0.8);
@@ -116,6 +119,7 @@ internal static class DeskPropArt
                 g.LineTo(new Point(cx + 7.5, cy - 10.5), true, false);
                 g.LineTo(new Point(cx + 11.0, cy + 10.5), true, false);
             }
+            stand.Freeze();
             dc.DrawGeometry(SignDark, SignEdge, stand);
             dc.DrawEllipse(GoldMoon, null, new Point(cx, cy - 4.2), 3.6, 3.6);
             dc.DrawEllipse(SignDark, null, new Point(cx + 1.5, cy - 4.8), 2.8, 2.8);

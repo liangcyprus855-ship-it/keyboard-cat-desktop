@@ -5,8 +5,8 @@
 extern "C" {
 #endif
 
-#define KC_APP_VERSION "1.13.2"
-#define KC_APP_BUILD "1132"
+#define KC_APP_VERSION "1.13.3"
+#define KC_APP_BUILD "1133"
 #define KC_GITHUB_REPO "liangcyprus855-ship-it/keyboard-cat-desktop"
 
 enum {
