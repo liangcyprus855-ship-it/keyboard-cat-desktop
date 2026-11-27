@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>联系开发者 - 键盘小猫</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --blue: #0071e3;
+    --blue-dark: #0051a2;
+    --bg-alt: #f5f5f7;
+    --text: #1d1d1f;
+    --text-sub: #6e6e73;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: #fff; color: var(--text);
+    -webkit-font-smoothing: antialiased; line-height: 1.6;
+  }
+  nav {
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background: rgba(255,255,255,.72);
+    border-bottom: 1px solid rgba(0,0,0,.08);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .nav-inner {
+    max-width: 980px; margin: 0 auto; padding: 0 22px;
+    height: 48px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-logo { font-weight: 600; font-size: 17px; color: var(--text); text-decoration: none; }
+  .nav-links a { color: var(--blue); text-decoration: none; font-size: 13px; }
+  .nav-links a:hover { color: var(--blue-dark); }
+
+  main { max-width: 720px; margin: 0 auto; padding: 70px 22px 90px; text-align: center; }
+  .tag {
+    display: inline-block; background: rgba(0,113,227,.1); color: var(--blue);
+    font-size: 14px; font-weight: 600; padding: 6px 18px; border-radius: 980px; margin-bottom: 20px;
+  }
+  h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 700; letter-spacing: -.02em; }
+  .sub { color: var(--text-sub); font-size: 18px; margin-top: 14px; }
+
+  .qr-card {
+    margin: 46px auto 0; max-width: 400px;
+    background: var(--bg-alt); border-radius: 24px; padding: 34px 30px 30px;
+    transition: transform .25s, box-shadow .25s;
+  }
+  .qr-card:hover { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(0,0,0,.12); }
+  .qr-card img {
+    width: 100%; display: block; border-radius: 14px;
+    background: #fff; box-shadow: 0 4px 18px rgba(0,0,0,.08);
+  }
+  .dev-name { font-size: 20px; font-weight: 600; margin-top: 22px; }
+  .dev-role {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 8px; color: var(--blue); font-size: 14px; font-weight: 600;
+    background: rgba(0,113,227,.09); padding: 4px 14px; border-radius: 980px;
+  }
+  .qr-hint { color: var(--text-sub); font-size: 14px; margin-top: 14px; }
+
+  .back-row { margin-top: 40px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center;
+    padding: 12px 26px; border-radius: 980px;
+    font-size: 15px; font-weight: 500; text-decoration: none;
+    transition: transform .2s, background .2s;
+  }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover { background: var(--blue-dark); transform: translateY(-2px); }
+  .btn-ghost { background: transparent; color: var(--blue); border: 1px solid var(--blue); }
+  .btn-ghost:hover { background: rgba(0,113,227,.08); transform: translateY(-2px); }
+
+  footer { text-align: center; padding: 30px 22px; color: var(--text-sub); font-size: 13px; border-top: 1px solid rgba(0,0,0,.08); }
+  footer a { color: var(--blue); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="index.html">🐾 键盘小猫</a>
+    <div class="nav-links"><a href="index.html#download">返回下载</a></div>
+  </div>
+</nav>
+
+<main>
+  <span class="tag">联系开发者</span>
+  <h1>有问题？找我</h1>
+  <p class="sub">扫描二维码添加微信，反馈 bug、提需求或交流桌宠玩法</p>
+
+  <div class="qr-card">
+    <img src="assets/wechat-qr.jpg" alt="开发者微信二维码">
+    <div class="dev-name">阿勒泰男孩</div>
+    <span class="dev-role">💻 键盘小猫 · 开发者</span>
+    <p class="qr-hint">微信「扫一扫」→ 相册识别本图即可添加</p>
+  </div>
+
+  <div class="back-row">
+    <a class="btn btn-primary" href="index.html#download">⬇ 去下载</a>
+    <a class="btn btn-ghost" href="index.html#mac-guide">Mac 安装说明</a>
+  </div>
+</main>
+
+<footer>
+  🐾 键盘小猫 · <a href="index.html">返回首页</a>
+</footer>
+
+</body>
+</html>
